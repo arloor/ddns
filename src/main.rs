@@ -3,8 +3,7 @@ mod logx;
 use std::collections::HashMap;
 use std::thread::sleep;
 use std::time::Duration;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::{Value};
+use serde::{Deserialize, Serialize};
 use anyhow::{anyhow, Error};
 use std::env;
 use log::{error, info};
@@ -31,7 +30,7 @@ struct Record {
 
 /// 从环境变量中读取domain、sub_domain、token
 fn main() -> Result<(), Error> {
-    logx::init_log("log/ddns.log");
+    logx::init_log("log","ddns.log");
     let domain = env::var("dnspod_domain")?;
     let sub_domain = env::var("dnspod_subdomain")?;
     let token = env::var("dnspod_token")?;
