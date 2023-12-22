@@ -30,10 +30,17 @@ struct Record {
 /// 从环境变量中读取domain、sub_domain、token
 fn main() -> Result<(), Error> {
     logx::init_log("log", "ddns.log");
+    let token = match env::var("dnspod_token") {
+        Ok(token) => token,
+        Err(_) => {
+            match env::var("DNSPOD_TOKEN") {
+                Ok(token) => token,
+                Err(_) => panic!("dnspod_token/DNSPOD_TOKEN is not set"),
+            }
+        }
+    };  
     let domain = env::var("dnspod_domain").expect("dnspod_domain is not set");
     let sub_domain = env::var("dnspod_subdomain").expect("dnspod_subdomain is not set");
-    let token = env::var("dnspod_token")
-        .unwrap_or(env::var("DNSPOD_TOKEN").expect("dnspod_token is not set"));
     let ip_url = env::var("dnspod_ip_url").unwrap_or("https://www.arloor.com/ip".to_string());
     info!(
         "monitor current ip by [{}] and modify [{}.{}] with token [{}]",
