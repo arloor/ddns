@@ -1,0 +1,31 @@
+name: Update
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  all:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: build
+        run: |
+          cargo build --release
+      - name: gihub_release
+        run: |
+          if $(gh release delete v1.0.0 -y --cleanup-tag); 
+            then echo "delete old release"; 
+            else echo "no old release";
+          fi
+          git config --local user.email "admin@arloor.com"
+          git config --local user.name "arloor"
+          git tag  v1.0.0 -m 'latest'
+          git push origin v1.0.0
+          gh release create v1.0.0 target/release/ddns --notes-from-tag --latest -t latest 
