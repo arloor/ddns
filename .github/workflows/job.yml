@@ -8,7 +8,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  GH_TOKEN: ${{ github.token }}
 
 jobs:
   all:
@@ -19,6 +18,8 @@ jobs:
         run: |
           cargo build --release
       - name: gihub_release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if $(gh release delete v1.0.0 -y --cleanup-tag); 
             then echo "delete old release"; 
