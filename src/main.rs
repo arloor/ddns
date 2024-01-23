@@ -41,7 +41,7 @@ fn main() -> Result<(), Error> {
     };  
     let domain = env::var("dnspod_domain").expect("dnspod_domain is not set");
     let sub_domain = env::var("dnspod_subdomain").expect("dnspod_subdomain is not set");
-    let ip_url = env::var("dnspod_ip_url").unwrap_or("https://www.arloor.com/ip".to_string());
+    let ip_url = env::var("dnspod_ip_url").unwrap_or("http://whatismyip.akamai.com".to_string());
     info!(
         "monitor current ip by [{}] and modify [{}.{}] with token [{}]",
         ip_url, sub_domain, domain, token

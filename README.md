@@ -36,8 +36,15 @@ dnspod_token="xxxxxx,594xxxxxxxxxxxxxxxxxxxx73"
 dnspod_domain="example.com"
 dnspod_subdomain="www"
 ## 查询ip的url，可以不指定
-dnspod_ip_url="https://xxxx.com/ip"
+dnspod_ip_url="http://whatismyip.akamai.com"
 EOF
+```
+
+## 可执行文件
+
+```bash
+curl -sSLf https://github.com/arloor/ddns/releases/download/v1.0.0/ddns -o /tmp/ddns
+install -m 755 /tmp/ddns /usr/local/bin/ddns
 ```
 
 ## 日志
