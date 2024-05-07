@@ -106,9 +106,9 @@ fn get_record(domain: &str, sub_domain: &str, token: &str) -> Result<Option<Reco
     let result: serde_json::Result<Res> = serde_json::from_str(&text);
     match result {
         Ok(res) => {
-            if res.records.len() > 0 {
+            if !res.records.is_empty() {
                 info!("current record is {:?}", res.records[0]);
-                Ok(Some((&res.records[0]).clone()))
+                Ok(Some(res.records[0].clone()))
             } else {
                 Ok(None)
             }
