@@ -1,5 +1,3 @@
-mod logx;
-
 use anyhow::{anyhow, Error};
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -29,7 +27,7 @@ struct Record {
 
 /// 从环境变量中读取domain、sub_domain、token
 fn main() -> Result<(), Error> {
-    logx::init_log("log", "ddns.log");
+    log_x::init_log("log", "ddns.log")?;
     let token = match env::var("dnspod_token") {
         Ok(token) => token,
         Err(_) => {
