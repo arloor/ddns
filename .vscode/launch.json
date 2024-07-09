@@ -15,6 +15,7 @@
             "env": {
                 "dnspod_domain": "arloor.dev",
                 "dnspod_subdomain": "codespaces",
+                "dnspod_token":"154396,17694ffdbb7b83ad18304b35161b1e24"
                 // "dnspod_ip_url": "https://www.arloor.com:444/ip"
             }
         }
