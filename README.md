@@ -43,8 +43,8 @@ EOF
 ## 可执行文件
 
 ```bash
-curl -sSLf https://github.com/arloor/ddns/releases/download/v1.0.0/ddns -o /tmp/ddns
-install -m 755 /tmp/ddns /usr/local/bin/ddns
+curl -sSLf https://us.arloor.dev/https://github.com/arloor/ddns/releases/download/v1.0.0/ddns -o /tmp/ddns
+install /tmp/ddns /usr/local/bin/ddns
 ```
 
 ## 日志
