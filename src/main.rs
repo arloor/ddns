@@ -30,13 +30,11 @@ fn main() -> Result<(), Error> {
     log_x::init_log("log", "ddns.log")?;
     let token = match env::var("dnspod_token") {
         Ok(token) => token,
-        Err(_) => {
-            match env::var("DNSPOD_TOKEN") {
-                Ok(token) => token,
-                Err(_) => panic!("dnspod_token/DNSPOD_TOKEN is not set"),
-            }
-        }
-    };  
+        Err(_) => match env::var("DNSPOD_TOKEN") {
+            Ok(token) => token,
+            Err(_) => panic!("dnspod_token/DNSPOD_TOKEN is not set"),
+        },
+    };
     let domain = env::var("dnspod_domain").expect("dnspod_domain is not set");
     let sub_domain = env::var("dnspod_subdomain").expect("dnspod_subdomain is not set");
     let ip_url = env::var("dnspod_ip_url").unwrap_or("http://whatismyip.akamai.com".to_string());
@@ -146,7 +144,7 @@ fn modify_record(current_ip: &String, record: &Record, token: &str, domain: &str
     }
 }
 
-fn add_record(current_ip: &String, token: &str, domain: &str, sub_domain: &str) {
+fn add_record(current_ip: &str, token: &str, domain: &str, sub_domain: &str) {
     let client = reqwest::blocking::Client::new();
     let mut params = HashMap::new();
     params.insert("login_token", token);
