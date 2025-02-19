@@ -1,0 +1,35 @@
+name: Update
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  all:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build
+        id: build
+        uses: arloor/rust_musl_action@latest
+        with:
+          use_musl: false
+          rust_flags: -C target-feature=+crt-static
+          extra_deps: gcc
+      - name: gihub_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version='v1.0.0'
+          if $(gh release delete ${version} -y --cleanup-tag); 
+            then echo "delete old release"; 
+            else echo "no old release";
+          fi
+          git config --local user.email "admin@arloor.com"
+          git config --local user.name "arloor"
+          gh release create ${version} ${{ steps.build.outputs.release_dir }}ddns -n "$version" -t "$version" --latest
