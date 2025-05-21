@@ -53,7 +53,12 @@ fn main() -> Result<(), Error> {
             if current_ip != latest_ip || i % FORCE_GET_RECORD_INTERVAL == 0 {
                 match get_record(&domain, &sub_domain, &token) {
                     Ok(Some(record)) => {
-                        modify_record(&current_ip, &record, &token, &domain);
+                        if current_ip != record.value {
+                            info!("ip changed from {} to {}", record.value, current_ip);
+                            modify_record(&current_ip, &record, &token, &domain);
+                        } else {
+                            info!("ip not changed");
+                        }
                     }
                     Ok(None) => {
                         info!("no such record: {}.{}", sub_domain, domain);
