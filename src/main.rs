@@ -24,18 +24,18 @@ fn main() -> Result<(), Error> {
     let ip_url = env::var("dnspod_ip_url").unwrap_or("http://whatismyip.akamai.com".to_string());
 
     // 初始化DNSPod配置
-    dnspod::init(token, domain, sub_domain, Some(ip_url))?;
+    let client = dnspod::init(token, domain, sub_domain, Some(ip_url));
 
     let mut latest_ip = "".to_string();
 
     let mut i = 0;
     loop {
-        let current_ip = dnspod::current_ip();
+        let current_ip = client.current_ip();
         if let Ok(current_ip) = current_ip {
             // let current_ip = "127.0.0.1".to_string();
             info!("current ip = {}", current_ip);
             if current_ip != latest_ip || i % FORCE_GET_RECORD_INTERVAL == 0 {
-                if let Err(e) = dnspod::update_dns_record(&current_ip) {
+                if let Err(e) = client.update_dns_record(&current_ip) {
                     error!("Failed to update DNS record: {}", e);
                 } else {
                     latest_ip = current_ip;
