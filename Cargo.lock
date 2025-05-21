@@ -162,6 +162,7 @@ dependencies = [
  "anyhow",
  "log",
  "log_x",
+ "once_cell",
  "reqwest",
  "serde",
  "serde_json",
