@@ -22,43 +22,23 @@ pub struct DnspodClient {
     token: String,
     domain: String,
     sub_domain: String,
-    ip_url: String,
 }
 
 /// 初始化DNSPod配置并返回一个DnspodClient实例
-pub fn init(
-    token: String,
-    domain: String,
-    sub_domain: String,
-    ip_url: Option<String>,
-) -> DnspodClient {
-    let ip_url = ip_url.unwrap_or("http://whatismyip.akamai.com".to_string());
+pub fn init(token: String, domain: String, sub_domain: String) -> DnspodClient {
     info!(
-        "初始化DNSPod配置: monitor current ip by [{}] and modify [{}.{}] with token [{}]",
-        ip_url, sub_domain, domain, token
+        "初始化DNSPod配置: modify [{}.{}] with token [{}]",
+        sub_domain, domain, token
     );
 
     DnspodClient {
         token,
         domain,
         sub_domain,
-        ip_url,
     }
 }
 
 impl DnspodClient {
-    /// 获取当前IP地址
-    pub fn current_ip(&self) -> Result<String, Error> {
-        let result = reqwest::blocking::get(&self.ip_url);
-        match result {
-            Ok(ip) => match ip.text() {
-                Ok(text) => Ok(text),
-                Err(e) => Err(anyhow!(e)),
-            },
-            Err(e) => Err(anyhow!(e)),
-        }
-    }
-
     /// 获取DNS记录
     pub fn get_record(&self) -> Result<Option<Record>, Error> {
         let mut params: HashMap<&'static str, &str> = HashMap::new();
