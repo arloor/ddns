@@ -2,6 +2,7 @@ use anyhow::{anyhow, Error};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::net::IpAddr;
 
 #[derive(Serialize, Deserialize)]
 struct Res {
@@ -39,6 +40,15 @@ pub fn init(token: String, domain: String, sub_domain: String) -> DnspodClient {
 }
 
 impl DnspodClient {
+    /// 判断IP地址类型，返回对应的记录类型
+    fn get_record_type(ip: &str) -> &'static str {
+        match ip.parse::<IpAddr>() {
+            Ok(IpAddr::V4(_)) => "A",
+            Ok(IpAddr::V6(_)) => "AAAA",
+            Err(_) => "A", // 默认使用A记录
+        }
+    }
+
     /// 获取DNS记录
     pub fn get_record(&self) -> Result<Option<Record>, Error> {
         let mut params: HashMap<&'static str, &str> = HashMap::new();
@@ -85,6 +95,7 @@ impl DnspodClient {
             params.insert("sub_domain", &record.name);
             params.insert("record_id", &record.id);
             params.insert("record_line_id", &record.line_id);
+            params.insert("record_type", Self::get_record_type(current_ip));
             params.insert("value", current_ip);
             let res = client
                 .post("https://dnsapi.cn/Record.Ddns")
@@ -113,7 +124,7 @@ impl DnspodClient {
         params.insert("lang", "en");
         params.insert("domain", &self.domain);
         params.insert("sub_domain", &self.sub_domain);
-        params.insert("record_type", "A");
+        params.insert("record_type", Self::get_record_type(current_ip));
         params.insert("record_line", "默认");
         params.insert("value", current_ip);
         let res = client
