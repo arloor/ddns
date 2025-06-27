@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"]
 use anyhow::{anyhow, Error};
 use clap::Parser;
 use log::{error, info};
