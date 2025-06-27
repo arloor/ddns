@@ -4,6 +4,7 @@ use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -66,6 +67,14 @@ fn default_ip_url() -> String {
     "http://whatismyip.akamai.com".to_string()
 }
 
+// 全局静态HTTP客户端，禁用代理
+static HTTP_CLIENT: LazyLock<reqwest::blocking::Client> = LazyLock::new(|| {
+    reqwest::blocking::Client::builder()
+        .no_proxy()
+        .build()
+        .expect("Failed to create HTTP client")
+});
+
 /// 解析完整域名，返回(子域名, 主域名)
 /// 支持多级子域名：
 /// 例如: "sub.example.com" -> ("sub", "example.com")
@@ -103,7 +112,7 @@ fn parse_domain(full_domain: &str) -> Result<(String, String), Error> {
 
 /// 获取当前IP地址
 fn current_ip(ip_url: &str) -> Result<String, Error> {
-    let result = reqwest::blocking::get(ip_url);
+    let result = HTTP_CLIENT.get(ip_url).send();
     match result {
         Ok(ip) => match ip.text() {
             Ok(text) => Ok(text.trim().to_string()),
