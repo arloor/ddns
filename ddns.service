@@ -1,0 +1,31 @@
+# DDNS Systemd Service Template
+# 将此文件保存为 /lib/systemd/system/ddns.service
+
+[Unit]
+Description=DNSPod DDNS Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ddns
+ExecStart=/usr/local/bin/ddns -c /opt/ddns/config.toml
+LimitNOFILE=100000
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+
+# 安装说明：
+# 1. 复制编译好的二进制文件到 /usr/local/bin/ddns
+# 2. 创建目录 /opt/ddns
+# 3. 将 config.toml 放在 /opt/ddns/ 目录下
+# 4. 启用并启动服务：
+#    sudo systemctl enable ddns
+#    sudo systemctl start ddns
+#    sudo systemctl status ddns
+# 5. 查看日志：
+#    sudo journalctl -u ddns -f
+#    tail -f /opt/ddns/log/dnspod.log

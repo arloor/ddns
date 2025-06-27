@@ -1,0 +1,46 @@
+# DDNS配置文件示例 - 支持多级子域名
+# 间隔时间（秒）
+sleep_secs = 120
+# 每隔几次强制从dnspod获取最新的记录
+force_get_record_interval = 5
+
+# 默认配置（可选）
+# 当域名配置中没有指定token或ip_url时，会使用这些默认值
+default_token = "your_default_token_id,your_default_token_secret"
+default_ip_url = "https://api.ipify.org"
+
+# 域名配置列表
+# 支持多级子域名格式：
+# - "sub.example.com" 表示一级子域名记录
+# - "api.v2.example.com" 表示二级子域名记录
+# - "deep.nested.sub.example.com" 表示多级子域名记录
+# - "@.example.com" 或 "example.com" 表示根域名记录
+
+# 示例1：使用默认token和ip_url的一级子域名
+[[domains]]
+domain = "blog.example.com"
+
+# 示例2：使用自定义token的根域名
+[[domains]]
+domain = "@.mysite.org"                       # 等同于 "mysite.org"
+token = "custom_token_id,custom_token_secret"
+
+# 示例3：二级子域名 - API版本控制
+[[domains]]
+domain = "api.v2.example.com"
+token = "another_token_id,another_token_secret"
+ip_url = "https://www.arloor.com/ip"
+
+# 示例4：三级子域名 - 微服务架构
+[[domains]]
+domain = "auth.service.k8s.example.com"
+ip_url = "https://ip.seeip.org"
+
+# 示例5：深层嵌套子域名
+[[domains]]
+domain = "app.staging.east.aws.example.com"
+
+# 示例6：特殊情况 - 国际化域名
+[[domains]]
+domain = "cdn.prod.example.co.uk"
+token = "uk_specific_token_id,uk_specific_token_secret"
