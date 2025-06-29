@@ -5,18 +5,23 @@ A Rust-based DNSPod DDNS client that supports multiple domains and TOML configur
 ## Features
 
 - 支持多个域名配置
-- 基于TOML配置文件
+- 基于 TOML 配置文件
 - 命令行参数支持
-- 自动IP变化检测
+- 自动 IP 变化检测
 - 强制更新机制
 - 详细的日志记录
+- 可选的无控制台窗口模式（Windows）
 
 ## 安装和使用
 
 ### 1. 编译程序
 
 ```bash
+# 标准编译（显示控制台窗口）
 cargo build --release
+
+# 无控制台窗口编译（适用于 Windows 后台运行）
+cargo build --release --features no-console
 ```
 
 ### 2. 配置文件
@@ -38,7 +43,7 @@ default_ip_url = "https://api.ipify.org"
 # 域名配置列表
 # 支持多级子域名格式：
 # - "sub.example.com" 表示一级子域名记录
-# - "api.v2.example.com" 表示二级子域名记录  
+# - "api.v2.example.com" 表示二级子域名记录
 # - "deep.nested.sub.example.com" 表示多级子域名记录
 # - "@.example.com" 或 "example.com" 表示根域名记录
 
@@ -88,10 +93,10 @@ domain = "auth.service.k8s.example.com"
 
 ### 全局配置
 
-- `sleep_secs`: 检查间隔时间（秒），默认120秒
-- `force_get_record_interval`: 强制更新间隔次数，默认每5次检查强制更新一次
-- `default_token`: 默认DNSPod Token（可选），当域名配置中未指定token时使用
-- `default_ip_url`: 默认IP查询URL（可选），当域名配置中未指定ip_url时使用，默认为"http://whatismyip.akamai.com"
+- `sleep_secs`: 检查间隔时间（秒），默认 120 秒
+- `force_get_record_interval`: 强制更新间隔次数，默认每 5 次检查强制更新一次
+- `default_token`: 默认 DNSPod Token（可选），当域名配置中未指定 token 时使用
+- `default_ip_url`: 默认 IP 查询 URL（可选），当域名配置中未指定 ip_url 时使用，默认为"http://whatismyip.akamai.com"
 
 ### 域名配置
 
@@ -99,17 +104,17 @@ domain = "auth.service.k8s.example.com"
 
 - `domain`: 完整域名，支持多级子域名
   - 一级子域名：`"sub.example.com"`（如 blog.example.com）
-  - 二级子域名：`"api.v2.example.com"`（如 api版本控制）
+  - 二级子域名：`"api.v2.example.com"`（如 api 版本控制）
   - 多级子域名：`"auth.service.k8s.example.com"`（如 微服务架构）
   - 根域名格式：`"@.example.com"` 或 `"example.com"`
 - `token`: DNSPod API Token（可选），格式为 "token_id,token_secret"，未指定时使用 `default_token`
-- `ip_url`: 获取当前IP的URL（可选），未指定时使用 `default_ip_url`
+- `ip_url`: 获取当前 IP 的 URL（可选），未指定时使用 `default_ip_url`
 
-## 获取DNSPod Token
+## 获取 DNSPod Token
 
-1. 登录 [DNSPod控制台](https://console.dnspod.cn/)
+1. 登录 [DNSPod 控制台](https://console.dnspod.cn/)
 2. 进入 "用户中心" -> "安全设置" -> "API Token"
-3. 创建新的Token，获得 token_id 和 token_secret
+3. 创建新的 Token，获得 token_id 和 token_secret
 4. 在配置文件中使用格式: "token_id,token_secret"
 
 ## 日志
@@ -121,6 +126,7 @@ domain = "auth.service.k8s.example.com"
 如果您之前使用环境变量方式，可以按如下方式迁移到配置文件：
 
 环境变量 -> 配置文件字段：
+
 - `dnspod_token` -> `default_token` 或 `domains[].token`
 - `dnspod_domain` + `dnspod_subdomain` -> `domains[].domain`
   - 原来的 `dnspod_domain="example.com"` + `dnspod_subdomain="www"` -> `domain="www.example.com"`
@@ -130,6 +136,7 @@ domain = "auth.service.k8s.example.com"
 ### 迁移示例
 
 原环境变量配置：
+
 ```bash
 export dnspod_token="12345,abcdef"
 export dnspod_domain="example.com"
@@ -138,6 +145,7 @@ export dnspod_ip_url="https://api.ipify.org"
 ```
 
 新配置文件：
+
 ```toml
 default_token = "12345,abcdef"
 default_ip_url = "https://api.ipify.org"
@@ -148,11 +156,12 @@ domain = "www.example.com"
 
 ## 示例
 
-假设您要为以下域名配置DDNS：
-- `blog.example.com`（一级子域名，使用默认token）
-- `api.v2.mysite.org`（二级子域名，使用自定义token）
+假设您要为以下域名配置 DDNS：
+
+- `blog.example.com`（一级子域名，使用默认 token）
+- `api.v2.mysite.org`（二级子域名，使用自定义 token）
 - `auth.service.k8s.example.com`（多级子域名，微服务架构）
-- `example.com` 根域名（使用默认token和自定义IP查询）
+- `example.com` 根域名（使用默认 token 和自定义 IP 查询）
 
 配置文件示例：
 
@@ -184,7 +193,7 @@ ip_url = "https://ip.seeip.org"
 # 根域名，使用默认token但自定义ip_url
 ```
 
-## Systemd服务配置
+## Systemd 服务配置
 
 ### 1. 安装二进制文件
 
@@ -218,7 +227,7 @@ ip_url = "https://api.ipify.org"
 EOF
 ```
 
-### 3. 创建systemd服务
+### 3. 创建 systemd 服务
 
 ```bash
 sudo tee /lib/systemd/system/ddns.service <<EOF
@@ -273,4 +282,35 @@ install /tmp/ddns /usr/local/bin/ddns
 
 ```shell
 tailf -fn 100 /opt/ddns/log/ddns.log
+```
+
+## Features 配置
+
+### no-console Feature
+
+在 Windows 系统上，你可以选择编译无控制台窗口的版本，适合作为后台服务运行：
+
+```bash
+# 标准编译（会显示控制台窗口）
+cargo build --release
+
+# 无控制台窗口编译
+cargo build --release --features no-console
+```
+
+启用 `no-console` feature 后：
+
+- 程序运行时不会显示控制台窗口
+- 适合作为 Windows 服务或后台任务运行
+- 所有日志仍会正常输出到日志文件
+- 只在 Windows 平台生效，其他平台无影响
+
+### 在 Cargo.toml 中配置
+
+你也可以在 `Cargo.toml` 中将 `no-console` 设为默认 feature：
+
+```toml
+[features]
+default = ["no-console"]
+no-console = []
 ```
