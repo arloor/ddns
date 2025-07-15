@@ -164,7 +164,7 @@ fn execute_hook_command(
             }
         }
         Err(e) => {
-            let error_msg = format!("Failed to execute hook command: {}", e);
+            let error_msg = format!("Failed to execute hook command: {e}");
             error!("{}", error_msg);
             Err(anyhow!(error_msg))
         }
