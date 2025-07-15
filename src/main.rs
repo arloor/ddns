@@ -234,36 +234,38 @@ fn handle_domain(
         .ok_or_else(|| anyhow!("No token available for domain {}", domain_key))?;
 
     let latest_ip = latest_ips.get(&domain_key).cloned().unwrap_or_default();
-    let ip_changed = current_ip != latest_ip;
-
-    if ip_changed || force_update {
+    if current_ip != latest_ip || force_update {
         let client = dnspod::init(token.clone(), main_domain, subdomain);
 
         match client.update_dns_record(&current_ip.to_string()) {
-            Ok(_) => {
+            Ok(true) => {
                 info!(
                     "Successfully updated DNS record for {}: {}",
                     domain_key, current_ip
                 );
 
                 // 如果IP发生变化，执行hook指令
-                if ip_changed {
-                    // 获取hook指令，优先使用域名配置中的hook_command
-                    if let Some(hook_command) = domain_config
-                        .hook_command
-                        .as_ref()
-                        .or(config.default_hook_command.as_ref())
+                // 获取hook指令，优先使用域名配置中的hook_command
+                if let Some(hook_command) = domain_config
+                    .hook_command
+                    .as_ref()
+                    .or(config.default_hook_command.as_ref())
+                {
+                    if let Err(e) =
+                        execute_hook_command(hook_command, &domain_key, current_ip, &latest_ip)
                     {
-                        if let Err(e) =
-                            execute_hook_command(hook_command, &domain_key, current_ip, &latest_ip)
-                        {
-                            error!("Hook command execution failed for {}: {}", domain_key, e);
-                            // 不返回错误，让程序继续运行
-                        }
+                        error!("Hook command execution failed for {}: {}", domain_key, e);
+                        // 不返回错误，让程序继续运行
                     }
                 }
 
                 latest_ips.insert(domain_key, current_ip.to_string());
+            }
+            Ok(false) => {
+                info!(
+                    "no need to update DNS record for {}: {}",
+                    domain_key, current_ip
+                );
             }
             Err(e) => {
                 error!("Failed to update DNS record for {}: {}", domain_key, e);

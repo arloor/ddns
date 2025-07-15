@@ -144,26 +144,27 @@ impl DnspodClient {
     }
 
     /// 更新DNS记录（包括检查、添加或修改记录）
-    pub fn update_dns_record(&self, current_ip: &String) -> Result<(), Error> {
+    pub fn update_dns_record(&self, current_ip: &String) -> Result<bool, Error> {
         match self.get_record() {
             Ok(Some(record)) => {
                 if current_ip != &record.value {
                     info!("ip changed from {} to {}", record.value, current_ip);
                     self.modify_record(current_ip, &record)?;
+                    Ok(true)
                 } else {
                     info!("ip not changed");
+                    Ok(false)
                 }
             }
             Ok(None) => {
                 info!("no such record: {}.{}", self.sub_domain, self.domain);
                 self.add_record(current_ip)?;
+                Ok(true)
             }
             Err(e) => {
                 warn!("error get record: {}", e);
-                return Err(e);
+                Err(e)
             }
         }
-
-        Ok(())
     }
 }
