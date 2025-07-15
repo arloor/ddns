@@ -97,6 +97,7 @@ domain = "auth.service.k8s.example.com"
 - `force_get_record_interval`: 强制更新间隔次数，默认每 5 次检查强制更新一次
 - `default_token`: 默认 DNSPod Token（可选），当域名配置中未指定 token 时使用
 - `default_ip_url`: 默认 IP 查询 URL（可选），当域名配置中未指定 ip_url 时使用，默认为"http://whatismyip.akamai.com"
+- `default_hook_command`: 默认 IP 变化时执行的 hook 指令（可选），当域名配置中未指定 hook_command 时使用
 
 ### 域名配置
 
@@ -109,6 +110,7 @@ domain = "auth.service.k8s.example.com"
   - 根域名格式：`"@.example.com"` 或 `"example.com"`
 - `token`: DNSPod API Token（可选），格式为 "token_id,token_secret"，未指定时使用 `default_token`
 - `ip_url`: 获取当前 IP 的 URL（可选），未指定时使用 `default_ip_url`
+- `hook_command`: IP 变化时执行的 hook 指令（可选），未指定时使用 `default_hook_command`
 
 ## 获取 DNSPod Token
 
@@ -116,6 +118,70 @@ domain = "auth.service.k8s.example.com"
 2. 进入 "用户中心" -> "安全设置" -> "API Token"
 3. 创建新的 Token，获得 token_id 和 token_secret
 4. 在配置文件中使用格式: "token_id,token_secret"
+
+## Hook 功能
+
+程序支持在IP变化时执行hook指令，可以用于在IP更新后执行自定义操作，比如重启服务、通知其他系统等。
+
+### Hook 配置
+
+Hook 指令可以在全局默认配置或单个域名配置中设置：
+
+- `default_hook_command`: 全局默认 hook 指令
+- `hook_command`: 单个域名的 hook 指令（优先级高于全局默认）
+
+### Hook 环境变量
+
+执行 hook 指令时，程序会设置以下环境变量：
+
+- `$DOMAIN`: 发生IP变化的域名
+- `$NEW_IP`: 新的IP地址
+- `$OLD_IP`: 旧的IP地址
+
+### Hook 配置示例
+
+```toml
+# 全局默认 hook 指令
+default_hook_command = 'bash -c "echo IP changed to $NEW_IP for $DOMAIN"'
+
+[[domains]]
+domain = "k3s.arloor.com"
+# 域名特定的 hook 指令
+hook_command = 'bash -c "ssh root@exampleor.com \"systemctl restart wg-quick@wg0\""'
+
+[[domains]]
+domain = "blog.example.com"
+# 使用全局默认 hook 指令
+```
+
+### Hook 实际应用示例
+
+1. **重启 WireGuard 服务**：
+   ```toml
+   hook_command = 'bash -c "ssh root@server.com \"systemctl restart wg-quick@wg0\""'
+   ```
+
+2. **发送通知**：
+   ```toml
+   hook_command = 'bash -c "curl -X POST https://api.telegram.org/bot<token>/sendMessage -d chat_id=<chat_id> -d text=\"IP changed for $DOMAIN: $OLD_IP -> $NEW_IP\""'
+   ```
+
+3. **更新防火墙规则**：
+   ```toml
+   hook_command = 'bash -c "ssh root@firewall.com \"ufw allow from $NEW_IP && ufw delete allow from $OLD_IP\""'
+   ```
+
+4. **执行本地脚本**：
+   ```toml
+   hook_command = '/path/to/your/script.sh'
+   ```
+
+### Hook 注意事项
+
+- Hook 指令执行失败不会影响DDNS更新流程
+- Hook 指令的执行结果会记录在日志中
+- 建议在hook指令中添加错误处理和超时机制
+- 如果hook指令需要SSH连接，请确保已配置SSH密钥认证
 
 ## 日志
 

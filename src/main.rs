@@ -5,6 +5,7 @@ use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::LazyLock;
 use std::thread::sleep;
 use std::time::Duration;
@@ -40,6 +41,10 @@ struct Config {
     #[serde(default = "default_ip_url")]
     default_ip_url: String,
 
+    /// 默认IP变化时执行的hook指令
+    #[serde(default)]
+    default_hook_command: Option<String>,
+
     /// 域名配置列表
     domains: Vec<DomainConfig>,
 }
@@ -54,6 +59,9 @@ struct DomainConfig {
 
     /// 查询IP的URL (可选，未设置时使用default_ip_url)
     ip_url: Option<String>,
+
+    /// IP变化时执行的hook指令 (可选，未设置时使用default_hook_command)
+    hook_command: Option<String>,
 }
 
 fn default_sleep_secs() -> u64 {
@@ -108,6 +116,58 @@ fn parse_domain(full_domain: &str) -> Result<(String, String), Error> {
         let subdomain = subdomain_parts.join(".");
 
         Ok((subdomain, main_domain))
+    }
+}
+
+/// 执行hook指令
+fn execute_hook_command(
+    hook_command: &str,
+    domain: &str,
+    new_ip: &str,
+    old_ip: &str,
+) -> Result<(), Error> {
+    info!(
+        "Executing hook command for domain {}: {}",
+        domain, hook_command
+    );
+
+    // 设置环境变量
+    let mut cmd = Command::new("bash");
+    cmd.arg("-c")
+        .arg(hook_command)
+        .env("DOMAIN", domain)
+        .env("NEW_IP", new_ip)
+        .env("OLD_IP", old_ip);
+
+    match cmd.output() {
+        Ok(output) => {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                if !stdout.is_empty() {
+                    info!("Hook command stdout: {}", stdout.trim());
+                }
+                if !stderr.is_empty() {
+                    info!("Hook command stderr: {}", stderr.trim());
+                }
+                info!("Hook command executed successfully for domain {}", domain);
+                Ok(())
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let error_msg = format!(
+                    "Hook command failed with exit code {}: {}",
+                    output.status.code().unwrap_or(-1),
+                    stderr.trim()
+                );
+                error!("{}", error_msg);
+                Err(anyhow!(error_msg))
+            }
+        }
+        Err(e) => {
+            let error_msg = format!("Failed to execute hook command: {}", e);
+            error!("{}", error_msg);
+            Err(anyhow!(error_msg))
+        }
     }
 }
 
@@ -174,8 +234,9 @@ fn handle_domain(
         .ok_or_else(|| anyhow!("No token available for domain {}", domain_key))?;
 
     let latest_ip = latest_ips.get(&domain_key).cloned().unwrap_or_default();
+    let ip_changed = current_ip != latest_ip;
 
-    if current_ip != latest_ip || force_update {
+    if ip_changed || force_update {
         let client = dnspod::init(token.clone(), main_domain, subdomain);
 
         match client.update_dns_record(&current_ip.to_string()) {
@@ -184,6 +245,24 @@ fn handle_domain(
                     "Successfully updated DNS record for {}: {}",
                     domain_key, current_ip
                 );
+
+                // 如果IP发生变化，执行hook指令
+                if ip_changed {
+                    // 获取hook指令，优先使用域名配置中的hook_command
+                    if let Some(hook_command) = domain_config
+                        .hook_command
+                        .as_ref()
+                        .or(config.default_hook_command.as_ref())
+                    {
+                        if let Err(e) =
+                            execute_hook_command(hook_command, &domain_key, current_ip, &latest_ip)
+                        {
+                            error!("Hook command execution failed for {}: {}", domain_key, e);
+                            // 不返回错误，让程序继续运行
+                        }
+                    }
+                }
+
                 latest_ips.insert(domain_key, current_ip.to_string());
             }
             Err(e) => {

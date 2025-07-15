@@ -1,29 +1,30 @@
 # DDNS配置文件示例
 # 间隔时间（秒）
-sleep_secs = 120
+sleep_secs = 10
 # 每隔几次强制从dnspod获取最新的记录
-force_get_record_interval = 5
+force_get_record_interval = 1
 
 # 默认配置（可选）
 default_token = "12345,xxxxxxxxxxxxxxxxxx"
 default_ip_url = "https://www.arloor.com/ip"
 # 默认IP变化时执行的hook指令（可选）
-default_hook_command = 'echo IP changed to $NEW_IP for $DOMAIN'
+default_hook_command = '/root/ddns/test_hook.sh'
 
 # 域名配置列表
 # 完整域名格式：
 # - "sub.example.com" 表示子域名记录
 # - "@.example.com" 或 "example.com" 表示根域名记录
 [[domains]]
-domain = "k3s.arloor.com"
+domain = "test.arloor.com"
 # token = "可选，未设置时使用default_token"
 # ip_url = "可选，未设置时使用default_ip_url"
 # hook_command = "可选，IP变化时执行的hook指令，未设置时使用default_hook_command"
-# 示例：hook_command = "ssh root@example.com \"systemctl restart wg-quick@wg0\""
+# 示例：hook_command = 'bash -c "ssh root@exampleor.com \"systemctl restart wg-quick@wg0\""'
+hook_command = 'bash -c "echo \"Custom hook for test.arloor.com: IP changed from $OLD_IP to $NEW_IP\""'
 
 # 第二个域名示例（根域名）
-# [[domains]]
-# domain = "@.example.com"  # 或者直接写 "example.com"
-# token = "your_specific_token_here"
-# ip_url = "https://api.ipify.org"
-# hook_command = "ssh root@example.com \"systemctl restart wg-quick@wg0\""
+[[domains]]
+domain = "example2.com"
+token = "your_specific_token_here"
+ip_url = "https://api.ipify.org"
+hook_command = 'bash -c "ssh root@exampleor.com \"systemctl restart wg-quick@wg0\""'
