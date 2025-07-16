@@ -121,7 +121,7 @@ domain = "auth.service.k8s.example.com"
 
 ## Hook 功能
 
-程序支持在IP变化时执行hook指令，可以用于在IP更新后执行自定义操作，比如重启服务、通知其他系统等。
+程序支持在IP变化时执行hook指令，可以用于在IP更新后执行自定义操作，比如重启服务、通知其他系统等。（Windows上使用powershell，unix上使用bash）
 
 ### Hook 配置
 

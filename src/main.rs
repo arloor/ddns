@@ -4,6 +4,8 @@ use clap::Parser;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::fs;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::LazyLock;
@@ -132,10 +134,25 @@ fn execute_hook_command(
     );
 
     // 设置环境变量
-    let mut cmd = Command::new("bash");
-    cmd.arg("-c")
-        .arg(hook_command)
-        .env("DOMAIN", domain)
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = Command::new("powershell");
+        cmd.creation_flags(0x08000000)
+            .arg("-ExecutionPolicy")
+            .arg("Bypass")
+            .arg("-Command")
+            .arg(hook_command);
+        cmd
+    };
+
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut cmd = Command::new("bash");
+        cmd.arg("-c").arg(hook_command);
+        cmd
+    };
+
+    cmd.env("DOMAIN", domain)
         .env("NEW_IP", new_ip)
         .env("OLD_IP", old_ip);
 
