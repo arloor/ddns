@@ -148,6 +148,8 @@ default_hook_command = 'bash -c "echo IP changed to $NEW_IP for $DOMAIN"'
 domain = "k3s.arloor.com"
 # 域名特定的 hook 指令
 hook_command = 'bash -c "ssh root@exampleor.com \"systemctl restart wg-quick@wg0\""'
+# windows上使用powershell
+# hook_command = "write-output \"Windows IP updated to: $env:NEW_IP\""
 
 [[domains]]
 domain = "blog.example.com"
