@@ -21,7 +21,7 @@ A Rust-based DNSPod DDNS client that supports multiple domains and TOML configur
 cargo build --release
 
 # 无控制台窗口编译（适用于 Windows 后台运行）
-cargo build --release --features no-console
+cargo install --path . --features no-console
 ```
 
 ### 2. 配置文件
