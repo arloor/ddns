@@ -300,7 +300,7 @@ fn main() -> Result<(), Error> {
     let args = Args::parse();
 
     // 初始化日志
-    log_x::init_log("log", "dnspod.log")?;
+    log_x::init_log("log", "dnspod.log", "info")?;
 
     if args.verbose {
         info!("Verbose logging enabled");
