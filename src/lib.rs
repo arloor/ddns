@@ -27,10 +27,9 @@ pub struct DnspodClient {
 
 /// 初始化DNSPod配置并返回一个DnspodClient实例
 pub fn init(token: String, domain: String, sub_domain: String) -> DnspodClient {
-    info!(
-        "初始化DNSPod配置: modify [{}.{}] with token [{}]",
-        sub_domain, domain, token
-    );
+    // info!(
+    //     "初始化DNSPod配置: modify [{sub_domain}.{domain}] with token [{token}]"
+    // );
 
     DnspodClient {
         token,
@@ -76,7 +75,7 @@ impl DnspodClient {
                 }
             }
             Err(err) => {
-                warn!("error parse result: {}", text);
+                warn!("error parse result: {text}");
                 Err(anyhow!(err))
             }
         }
@@ -104,7 +103,7 @@ impl DnspodClient {
             if let Ok(res) = res {
                 let text = res.text();
                 if let Ok(text) = text {
-                    info!("modify result is： {}", text);
+                    info!("modify result is： {text}");
                 }
             } else {
                 info!("error modify record");
@@ -134,7 +133,7 @@ impl DnspodClient {
         if let Ok(res) = res {
             let text = res.text();
             if let Ok(text) = text {
-                info!("add result is： {}", text);
+                info!("add result is： {text}");
                 return Ok(());
             }
         }
@@ -162,7 +161,7 @@ impl DnspodClient {
                 Ok(true)
             }
             Err(e) => {
-                warn!("error get record: {}", e);
+                warn!("error get record: {e}");
                 Err(e)
             }
         }

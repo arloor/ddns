@@ -128,10 +128,7 @@ fn execute_hook_command(
     new_ip: &str,
     old_ip: &str,
 ) -> Result<(), Error> {
-    info!(
-        "Executing hook command for domain {}: {}",
-        domain, hook_command
-    );
+    info!("Executing hook command for domain {domain}: {hook_command}");
 
     // 设置环境变量
     #[cfg(windows)]
@@ -167,7 +164,7 @@ fn execute_hook_command(
                 if !stderr.is_empty() {
                     info!("Hook command stderr: {}", stderr.trim());
                 }
-                info!("Hook command executed successfully for domain {}", domain);
+                info!("Hook command executed successfully for domain {domain}");
                 Ok(())
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -176,13 +173,13 @@ fn execute_hook_command(
                     output.status.code().unwrap_or(-1),
                     stderr.trim()
                 );
-                error!("{}", error_msg);
+                error!("{error_msg}");
                 Err(anyhow!(error_msg))
             }
         }
         Err(e) => {
             let error_msg = format!("Failed to execute hook command: {e}");
-            error!("{}", error_msg);
+            error!("{error_msg}");
             Err(anyhow!(error_msg))
         }
     }
@@ -256,10 +253,7 @@ fn handle_domain(
 
         match client.update_dns_record(&current_ip.to_string()) {
             Ok(true) => {
-                info!(
-                    "Successfully updated DNS record for {}: {}",
-                    domain_key, current_ip
-                );
+                info!("Successfully updated DNS record for {domain_key}: {current_ip}");
 
                 // 如果IP发生变化，执行hook指令
                 // 获取hook指令，优先使用域名配置中的hook_command
@@ -271,7 +265,7 @@ fn handle_domain(
                     if let Err(e) =
                         execute_hook_command(hook_command, &domain_key, current_ip, &latest_ip)
                     {
-                        error!("Hook command execution failed for {}: {}", domain_key, e);
+                        error!("Hook command execution failed for {domain_key}: {e}");
                         // 不返回错误，让程序继续运行
                     }
                 }
@@ -279,18 +273,15 @@ fn handle_domain(
                 latest_ips.insert(domain_key, current_ip.to_string());
             }
             Ok(false) => {
-                info!(
-                    "no need to update DNS record for {}: {}",
-                    domain_key, current_ip
-                );
+                info!("no need to update DNS record for {domain_key}: {current_ip}");
             }
             Err(e) => {
-                error!("Failed to update DNS record for {}: {}", domain_key, e);
+                error!("Failed to update DNS record for {domain_key}: {e}");
                 return Err(e);
             }
         }
     } else {
-        info!("IP for {} unchanged: {}", domain_key, current_ip);
+        info!("IP for {domain_key} unchanged: {current_ip}");
     }
 
     Ok(())
@@ -320,10 +311,7 @@ fn main() -> Result<(), Error> {
         let force_update = iteration % config.force_get_record_interval == 0;
 
         if args.verbose {
-            info!(
-                "Starting iteration {}, force_update: {}",
-                iteration, force_update
-            );
+            info!("Starting iteration {iteration}, force_update: {force_update}");
         }
 
         // 处理每个域名配置
@@ -339,19 +327,16 @@ fn main() -> Result<(), Error> {
             // 获取当前IP
             match current_ip(ip_url) {
                 Ok(ip) => {
-                    info!("Current IP for {} from {}: {}", domain_key, ip_url, ip);
+                    info!("Current IP for {domain_key} from {ip_url}: {ip}");
 
                     if let Err(e) =
                         handle_domain(domain_config, &config, &ip, &mut latest_ips, force_update)
                     {
-                        error!("Error handling domain {}: {}", domain_key, e);
+                        error!("Error handling domain {domain_key}: {e}");
                     }
                 }
                 Err(e) => {
-                    error!(
-                        "Error fetching current IP for {} from {}: {}",
-                        domain_key, ip_url, e
-                    );
+                    error!("Error fetching current IP for {domain_key} from {ip_url}: {e}");
                 }
             }
         }
