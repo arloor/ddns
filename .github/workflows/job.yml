@@ -18,8 +18,8 @@ jobs:
         id: build
         uses: arloor/rust_musl_action@latest
         with:
-          use_musl: false
-          rust_flags: -C target-feature=+crt-static
+          use_musl: true
+          # rust_flags: -C target-feature=+crt-static
           extra_deps: gcc
       - name: gihub_release
         env:
