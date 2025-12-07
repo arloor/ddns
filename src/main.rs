@@ -72,9 +72,6 @@ struct DomainConfig {
     /// Cloudflare API Token (可选，provider为cloudflare时使用，未设置时使用default_cloudflare_token)
     cloudflare_token: Option<String>,
 
-    /// Cloudflare Account ID (可选，provider为cloudflare时使用，未设置时使用default_cloudflare_account_id)
-    cloudflare_account_id: Option<String>,
-
     /// 完整域名 (如: "sub.example.com" 或 "@.example.com" 表示根域名)
     domain: String,
 
