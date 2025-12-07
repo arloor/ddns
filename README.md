@@ -292,27 +292,27 @@ sleep_secs = 300  # 5分钟检查一次
 force_get_record_interval = 3
 
 # 默认配置
-default_token = "12345,abcdef123456"
+default_dnspod_token = "12345,abcdef123456"
+default_cloudflare_token = "your_cloudflare_api_token"
+default_provider = "dnspod"
 default_ip_url = "https://api.ipify.org"
 
 [[domains]]
 domain = "blog.example.com"
-# 使用默认token和default_ip_url
 
 [[domains]]
 domain = "api.v2.mysite.org"
-token = "67890,ghijkl789012"
-# 使用自定义token但默认ip_url
+dnspod_token = "67890,ghijkl789012"
 
 [[domains]]
 domain = "auth.service.k8s.example.com"
 ip_url = "https://ip.seeip.org"
-# 使用默认token但自定义ip_url
 
 [[domains]]
 domain = "@.example.com"  # 或者直接写 "example.com"
 ip_url = "https://ip.seeip.org"
-# 根域名，使用默认token但自定义ip_url
+provider = "cloudflare"
+hook_command = "echo \"IP changed to $NEW_IP for $DOMAIN\" >> /var/log/ddns-hook.log"
 ```
 
 ## Systemd 服务配置
@@ -338,14 +338,31 @@ sudo mkdir -p /opt/ddns
 sudo cp config.toml /opt/ddns/
 # 或者直接创建配置文件
 sudo tee /opt/ddns/config.toml <<EOF
-sleep_secs = 120
-force_get_record_interval = 5
+sleep_secs = 300  # 5分钟检查一次
+force_get_record_interval = 3
+
+# 默认配置
+default_dnspod_token = "12345,abcdef123456"
+default_cloudflare_token = "your_cloudflare_api_token"
+default_provider = "dnspod"
+default_ip_url = "https://api.ipify.org"
 
 [[domains]]
-token = "your_token_id,your_token_secret"
-domain = "your-domain.com"
-subdomain = "your-subdomain"
-ip_url = "https://api.ipify.org"
+domain = "blog.example.com"
+
+[[domains]]
+domain = "api.v2.mysite.org"
+dnspod_token = "67890,ghijkl789012"
+
+[[domains]]
+domain = "auth.service.k8s.example.com"
+ip_url = "https://ip.seeip.org"
+
+[[domains]]
+domain = "@.example.com"  # 或者直接写 "example.com"
+ip_url = "https://ip.seeip.org"
+provider = "cloudflare"
+hook_command = "echo \"IP changed to $NEW_IP for $DOMAIN\" >> /var/log/ddns-hook.log"
 EOF
 ```
 
