@@ -1,11 +1,15 @@
 use anyhow::{anyhow, Error};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Mutex;
+use std::{collections::HashMap, sync::LazyLock};
 
 use crate::{DnsProvider, DnsRecord};
+
+// 全局的 Cloudflare Zone 缓存: api_token -> domain -> zone_id
+static CLOUDFLARE_ZONE_CACHE: LazyLock<Mutex<HashMap<String, HashMap<String, String>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 // ========== Cloudflare 相关结构 ==========
 
@@ -78,8 +82,6 @@ struct CloudflareUpdateRequest {
 pub struct CloudflareProvider {
     api_token: String,
     record_name: String,
-    // 域名到Zone ID的缓存
-    zone_cache: Mutex<HashMap<String, String>>,
 }
 
 impl CloudflareProvider {
@@ -87,7 +89,6 @@ impl CloudflareProvider {
         CloudflareProvider {
             api_token,
             record_name,
-            zone_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -109,10 +110,12 @@ impl CloudflareProvider {
 
         // 先尝试从缓存读取
         {
-            let cache = self.zone_cache.lock().unwrap();
-            if let Some(zone_id) = cache.get(&zone_name) {
-                info!("Using cached zone_id for {}: {}", zone_name, zone_id);
-                return Ok(zone_id.clone());
+            let cache = CLOUDFLARE_ZONE_CACHE.lock().unwrap();
+            if let Some(token_cache) = cache.get(&self.api_token) {
+                if let Some(zone_id) = token_cache.get(&zone_name) {
+                    info!("Using cached zone_id for {}: {}", zone_name, zone_id);
+                    return Ok(zone_id.clone());
+                }
             }
         }
 
@@ -154,8 +157,11 @@ impl CloudflareProvider {
 
         // 存入缓存
         {
-            let mut cache = self.zone_cache.lock().unwrap();
-            cache.insert(zone_name, zone_id.clone());
+            let mut cache = CLOUDFLARE_ZONE_CACHE.lock().unwrap();
+            cache
+                .entry(self.api_token.clone())
+                .or_default()
+                .insert(zone_name, zone_id.clone());
         }
 
         Ok(zone_id)
