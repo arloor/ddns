@@ -136,7 +136,6 @@ hook_command = "curl -X POST https://your-webhook.com/notify"
   - Cloudflare 使用完整的 FQDN（如 "www.example.com"）
 - `dnspod_token`: DNSPod API Token（可选），格式为 "token_id,token_secret"，未指定时使用 `default_dnspod_token`
 - `cloudflare_token`: Cloudflare API Token（可选），未指定时使用 `default_cloudflare_token`
-- `cloudflare_zone_id`: Cloudflare Zone ID（可选），未指定时使用 `default_cloudflare_zone_id`
 - `ip_url`: 获取当前 IP 的 URL（可选），未指定时使用 `default_ip_url`
 - `hook_command`: IP 变化时执行的 hook 指令（可选），未指定时使用 `default_hook_command`
 
@@ -147,9 +146,7 @@ hook_command = "curl -X POST https://your-webhook.com/notify"
 3. 创建新的 Token，获得 token_id 和 token_secret
 4. 在配置文件中使用格式: "token_id,token_secret"
 
-## 获取 Cloudflare 认证信息
-
-### 1. 获取 API Token
+## 获取 Cloudflare  API Token
 
 1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)
 2. 进入 "My Profile" -> "API Tokens"
@@ -160,15 +157,6 @@ hook_command = "curl -X POST https://your-webhook.com/notify"
    - Zone - Zone - Read
 6. 选择需要管理的 Zone
 7. 创建 token 并复制保存
-
-### 2. 获取 Account ID（可选）
-
-Account ID 可以加速 Zone 查询，但不是必需的。程序会自动通过域名查询对应的 Zone ID。
-
-1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)
-2. 在右侧栏找到 "Account ID"，复制它
-
-**注意**：程序会自动从域名中提取根域名（如 `sub.example.com` -> `example.com`），然后调用 Cloudflare API 查询对应的 Zone ID 并缓存。因此配置文件中无需手动填写 Zone ID。
 
 ## Hook 功能
 
