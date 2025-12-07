@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Error};
-use log::{info, warn};
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -72,7 +72,7 @@ impl DnsProvider for DnspodProvider {
             Ok(res) => {
                 if !res.records.is_empty() {
                     let record = &res.records[0];
-                    info!("current record is {:?}", record);
+                    debug!("current record is {:?}", record);
                     Ok(Some(DnsRecord {
                         id: record.id.clone(),
                         name: record.name.clone(),
@@ -118,12 +118,12 @@ impl DnsProvider for DnspodProvider {
         if let Ok(res) = res {
             let text = res.text();
             if let Ok(text) = text {
-                info!("modify result is： {text}");
+                debug!("modify result is： {text}");
                 return Ok(());
             }
         }
 
-        info!("error modify record");
+        debug!("error modify record");
         Err(anyhow!("Error modify record"))
     }
 
@@ -149,12 +149,12 @@ impl DnsProvider for DnspodProvider {
         if let Ok(res) = res {
             let text = res.text();
             if let Ok(text) = text {
-                info!("add result is： {text}");
+                debug!("add result is： {text}");
                 return Ok(());
             }
         }
 
-        info!("error add record");
+        debug!("error add record");
         Err(anyhow!("Error adding record"))
     }
 }

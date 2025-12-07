@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Error};
-use log::{info, warn};
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::sync::Mutex;
@@ -113,14 +113,14 @@ impl CloudflareProvider {
             let cache = CLOUDFLARE_ZONE_CACHE.lock().unwrap();
             if let Some(token_cache) = cache.get(&self.api_token) {
                 if let Some(zone_id) = token_cache.get(&zone_name) {
-                    info!("Using cached zone_id for {}: {}", zone_name, zone_id);
+                    debug!("Using cached zone_id for {}: {}", zone_name, zone_id);
                     return Ok(zone_id.clone());
                 }
             }
         }
 
         // 缓存未命中，调用API查询
-        info!("Querying zone_id for domain: {}", zone_name);
+        debug!("Querying zone_id for domain: {}", zone_name);
         let client = reqwest::blocking::Client::new();
 
         let url = format!(
@@ -153,7 +153,7 @@ impl CloudflareProvider {
         }
 
         let zone_id = zone_list.result[0].id.clone();
-        info!("Found zone_id for {}: {}", zone_name, zone_id);
+        debug!("Found zone_id for {}: {}", zone_name, zone_id);
 
         // 存入缓存
         {
@@ -209,7 +209,7 @@ impl DnsProvider for CloudflareProvider {
 
                 if !response.result.is_empty() {
                     let record = &response.result[0];
-                    info!("current cloudflare record is {:?}", record);
+                    debug!("current cloudflare record is {:?}", record);
                     Ok(Some(DnsRecord {
                         id: record.id.clone(),
                         name: record.name.clone(),
@@ -257,7 +257,7 @@ impl DnsProvider for CloudflareProvider {
         match result {
             Ok(response) => {
                 if response.success {
-                    info!("cloudflare modify result: success");
+                    debug!("cloudflare modify result: success");
                     Ok(())
                 } else {
                     let errors: Vec<String> = response
@@ -305,7 +305,7 @@ impl DnsProvider for CloudflareProvider {
         match result {
             Ok(response) => {
                 if response.success {
-                    info!("cloudflare add result: success");
+                    debug!("cloudflare add result: success");
                     Ok(())
                 } else {
                     let errors: Vec<String> = response
