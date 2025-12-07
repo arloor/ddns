@@ -1,6 +1,7 @@
 #![cfg_attr(windows_subsystem, windows_subsystem = "windows")]
 use anyhow::{anyhow, Error};
 use clap::Parser;
+use dnspod::DnsProvider;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -35,9 +36,21 @@ struct Config {
     #[serde(default = "default_force_interval")]
     force_get_record_interval: i8,
 
+    /// 默认DNS Provider类型 ("dnspod" 或 "cloudflare")
+    #[serde(default = "default_provider")]
+    default_provider: String,
+
     /// 默认DNSPod Token
     #[serde(default)]
-    default_token: Option<String>,
+    default_dnspod_token: Option<String>,
+
+    /// 默认Cloudflare API Token
+    #[serde(default)]
+    default_cloudflare_token: Option<String>,
+
+    /// 默认Cloudflare Zone ID
+    #[serde(default)]
+    default_cloudflare_zone_id: Option<String>,
 
     /// 默认查询IP的URL
     #[serde(default = "default_ip_url")]
@@ -53,8 +66,18 @@ struct Config {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct DomainConfig {
-    /// DNSPod Token (可选，未设置时使用default_token)
-    token: Option<String>,
+    /// DNS Provider类型 (可选，未设置时使用default_provider)
+    /// 支持: "dnspod" 或 "cloudflare"
+    provider: Option<String>,
+
+    /// DNSPod Token (可选，provider为dnspod时使用，未设置时使用default_dnspod_token)
+    dnspod_token: Option<String>,
+
+    /// Cloudflare API Token (可选，provider为cloudflare时使用，未设置时使用default_cloudflare_token)
+    cloudflare_token: Option<String>,
+
+    /// Cloudflare Zone ID (可选，provider为cloudflare时使用，未设置时使用default_cloudflare_zone_id)
+    cloudflare_zone_id: Option<String>,
 
     /// 完整域名 (如: "sub.example.com" 或 "@.example.com" 表示根域名)
     domain: String,
@@ -76,6 +99,10 @@ fn default_force_interval() -> i8 {
 
 fn default_ip_url() -> String {
     "http://whatismyip.akamai.com".to_string()
+}
+
+fn default_provider() -> String {
+    "dnspod".to_string()
 }
 
 // 全局静态HTTP客户端，禁用代理
@@ -211,17 +238,54 @@ fn load_config(config_path: &PathBuf) -> Result<Config, Error> {
 
     // 验证每个域名配置
     for (i, domain_config) in config.domains.iter().enumerate() {
-        // 检查是否有token（要么在域名配置中，要么在默认配置中）
-        if domain_config.token.is_none() && config.default_token.is_none() {
+        let provider = domain_config
+            .provider
+            .as_ref()
+            .unwrap_or(&config.default_provider);
+
+        // 检查provider类型
+        if provider != "dnspod" && provider != "cloudflare" {
             return Err(anyhow!(
-                "Domain {} has no token and no default_token is configured",
-                i + 1
+                "Domain {} has invalid provider '{}'. Must be 'dnspod' or 'cloudflare'",
+                i + 1,
+                provider
             ));
         }
 
-        // 验证域名格式
-        if let Err(e) = parse_domain(&domain_config.domain) {
-            return Err(anyhow!("Domain {} has invalid format: {}", i + 1, e));
+        // 检查DNSPod配置
+        if provider == "dnspod" {
+            if domain_config.dnspod_token.is_none() && config.default_dnspod_token.is_none() {
+                return Err(anyhow!(
+                    "Domain {} uses DNSPod but has no dnspod_token and no default_dnspod_token is configured",
+                    i + 1
+                ));
+            }
+        }
+
+        // 检查Cloudflare配置
+        if provider == "cloudflare" {
+            if domain_config.cloudflare_token.is_none() && config.default_cloudflare_token.is_none()
+            {
+                return Err(anyhow!(
+                    "Domain {} uses Cloudflare but has no cloudflare_token and no default_cloudflare_token is configured",
+                    i + 1
+                ));
+            }
+            if domain_config.cloudflare_zone_id.is_none()
+                && config.default_cloudflare_zone_id.is_none()
+            {
+                return Err(anyhow!(
+                    "Domain {} uses Cloudflare but has no cloudflare_zone_id and no default_cloudflare_zone_id is configured",
+                    i + 1
+                ));
+            }
+        }
+
+        // 验证域名格式（仅DNSPod需要分割域名）
+        if provider == "dnspod" {
+            if let Err(e) = parse_domain(&domain_config.domain) {
+                return Err(anyhow!("Domain {} has invalid format: {}", i + 1, e));
+            }
         }
     }
 
@@ -236,49 +300,81 @@ fn handle_domain(
     latest_ips: &mut std::collections::HashMap<String, String>,
     force_update: bool,
 ) -> Result<(), Error> {
-    // 解析域名
-    let (subdomain, main_domain) = parse_domain(&domain_config.domain)?;
     let domain_key = domain_config.domain.clone();
 
-    // 获取token，优先使用域名配置中的token
-    let token = domain_config
-        .token
+    // 获取provider类型
+    let provider = domain_config
+        .provider
         .as_ref()
-        .or(config.default_token.as_ref())
-        .ok_or_else(|| anyhow!("No token available for domain {}", domain_key))?;
+        .unwrap_or(&config.default_provider);
 
     let latest_ip = latest_ips.get(&domain_key).cloned().unwrap_or_default();
     if current_ip != latest_ip || force_update {
-        let client = dnspod::init(token.clone(), main_domain, subdomain);
-
-        match client.update_dns_record(&current_ip.to_string()) {
-            Ok(true) => {
-                info!("Successfully updated DNS record for {domain_key}: {current_ip}");
-
-                // 如果IP发生变化，执行hook指令
-                // 获取hook指令，优先使用域名配置中的hook_command
-                if let Some(hook_command) = domain_config
-                    .hook_command
+        let updated = match provider.as_str() {
+            "dnspod" => {
+                // DNSPod provider
+                let (subdomain, main_domain) = parse_domain(&domain_config.domain)?;
+                let token = domain_config
+                    .dnspod_token
                     .as_ref()
-                    .or(config.default_hook_command.as_ref())
-                {
-                    if let Err(e) =
-                        execute_hook_command(hook_command, &domain_key, current_ip, &latest_ip)
-                    {
-                        error!("Hook command execution failed for {domain_key}: {e}");
-                        // 不返回错误，让程序继续运行
-                    }
-                }
+                    .or(config.default_dnspod_token.as_ref())
+                    .ok_or_else(|| {
+                        anyhow!("No DNSPod token available for domain {}", domain_key)
+                    })?;
 
-                latest_ips.insert(domain_key, current_ip.to_string());
+                let client = dnspod::init(token.clone(), main_domain, subdomain);
+                client.update_dns_record(&current_ip.to_string())?
             }
-            Ok(false) => {
-                info!("no need to update DNS record for {domain_key}: {current_ip}");
+            "cloudflare" => {
+                // Cloudflare provider
+                let token = domain_config
+                    .cloudflare_token
+                    .as_ref()
+                    .or(config.default_cloudflare_token.as_ref())
+                    .ok_or_else(|| {
+                        anyhow!("No Cloudflare token available for domain {}", domain_key)
+                    })?;
+
+                let zone_id = domain_config
+                    .cloudflare_zone_id
+                    .as_ref()
+                    .or(config.default_cloudflare_zone_id.as_ref())
+                    .ok_or_else(|| {
+                        anyhow!("No Cloudflare zone_id available for domain {}", domain_key)
+                    })?;
+
+                let provider = dnspod::CloudflareProvider::new(
+                    token.clone(),
+                    zone_id.clone(),
+                    domain_config.domain.clone(),
+                );
+                provider.update_dns_record(current_ip)?
             }
-            Err(e) => {
-                error!("Failed to update DNS record for {domain_key}: {e}");
-                return Err(e);
+            _ => {
+                return Err(anyhow!("Unknown provider: {}", provider));
             }
+        };
+
+        if updated {
+            info!("Successfully updated DNS record for {domain_key}: {current_ip}");
+
+            // 如果IP发生变化，执行hook指令
+            if let Some(hook_command) = domain_config
+                .hook_command
+                .as_ref()
+                .or(config.default_hook_command.as_ref())
+            {
+                if let Err(e) =
+                    execute_hook_command(hook_command, &domain_key, current_ip, &latest_ip)
+                {
+                    error!("Hook command execution failed for {domain_key}: {e}");
+                    // 不返回错误，让程序继续运行
+                }
+            }
+
+            latest_ips.insert(domain_key, current_ip.to_string());
+        } else {
+            info!("no need to update DNS record for {domain_key}: {current_ip}");
         }
     } else {
         info!("IP for {domain_key} unchanged: {current_ip}");
