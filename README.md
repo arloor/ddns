@@ -1,14 +1,16 @@
-# DDNS - DNSPod Dynamic DNS Client
+# DDNS - Multi-Provider Dynamic DNS Client
 
-A Rust-based DNSPod DDNS client that supports multiple domains and TOML configuration.
+A Rust-based DDNS client that supports DNSPod and Cloudflare, with multiple domains and TOML configuration.
 
 ## Features
 
+- 支持多个 DNS 提供商（DNSPod 和 Cloudflare）
 - 支持多个域名配置
 - 基于 TOML 配置文件
 - 命令行参数支持
 - 自动 IP 变化检测
 - 强制更新机制
+- IP 变化 Hook 通知支持
 - 详细的日志记录
 - 可选的无控制台窗口模式（Windows）
 
@@ -29,42 +31,60 @@ cargo install --path . --features no-console
 创建 `config.toml` 配置文件（或使用 `-c` 参数指定其他路径）：
 
 ```toml
-# DDNS配置文件
+# DDNS配置文件 - 支持DNSPod和Cloudflare
 # 间隔时间（秒）
 sleep_secs = 120
-# 每隔几次强制从dnspod获取最新的记录
+# 每隔几次强制从DNS provider获取最新的记录
 force_get_record_interval = 5
 
+# 默认DNS Provider类型 ("dnspod" 或 "cloudflare")
+default_provider = "dnspod"
+
 # 默认配置（可选）
-# 当域名配置中没有指定token或ip_url时，会使用这些默认值
-default_token = "your_default_token_id,your_default_token_secret"
+# DNSPod默认配置
+default_dnspod_token = "your_dnspod_token_id,your_dnspod_token_secret"
+
+# Cloudflare默认配置
+default_cloudflare_token = "your_cloudflare_api_token"
+# 可选：Cloudflare Account ID（用于加速Zone查询）
+# default_cloudflare_account_id = "your_cloudflare_account_id"
+
+# 默认IP查询URL
 default_ip_url = "https://api.ipify.org"
 
-# 域名配置列表
-# 支持多级子域名格式：
-# - "sub.example.com" 表示一级子域名记录
-# - "api.v2.example.com" 表示二级子域名记录
-# - "deep.nested.sub.example.com" 表示多级子域名记录
-# - "@.example.com" 或 "example.com" 表示根域名记录
+# 默认IP变化时执行的hook指令（可选）
+default_hook_command = "echo \"IP changed to $NEW_IP for $DOMAIN\" >> /var/log/ddns.log"
 
-# 示例1：使用默认token和ip_url的一级子域名
+# 域名配置列表
+# DNSPod支持多级子域名格式：
+# - "sub.example.com" 表示一级子域名
+# - "api.v2.example.com" 表示二级子域名
+# - "@.example.com" 或 "example.com" 表示根域名
+# Cloudflare使用完整的FQDN
+
+# DNSPod示例：使用默认配置
 [[domains]]
 domain = "blog.example.com"
+provider = "dnspod"
 
-# 示例2：使用自定义token的根域名
+# DNSPod示例：自定义token
 [[domains]]
-domain = "@.mysite.org"  # 等同于 "mysite.org"
-token = "custom_token_id,custom_token_secret"
+domain = "@.mysite.org"
+provider = "dnspod"
+dnspod_token = "custom_token_id,custom_token_secret"
 
-# 示例3：二级子域名 - API版本控制
+# Cloudflare示例：使用默认配置（自动查询Zone ID）
 [[domains]]
-domain = "api.v2.example.com"
-token = "another_token_id,another_token_secret"
-ip_url = "https://www.arloor.com/ip"
+domain = "www.cloudflare-example.com"
+provider = "cloudflare"
 
-# 示例4：三级子域名 - 微服务架构
+# Cloudflare示例：自定义配置
 [[domains]]
-domain = "auth.service.k8s.example.com"
+domain = "api.cloudflare-example.com"
+provider = "cloudflare"
+cloudflare_token = "your_cloudflare_api_token"
+cloudflare_account_id = "your_cloudflare_account_id"  # 可选
+hook_command = "curl -X POST https://your-webhook.com/notify"
 ```
 
 ### 3. 运行程序
@@ -95,20 +115,28 @@ domain = "auth.service.k8s.example.com"
 
 - `sleep_secs`: 检查间隔时间（秒），默认 120 秒
 - `force_get_record_interval`: 强制更新间隔次数，默认每 5 次检查强制更新一次
-- `default_token`: 默认 DNSPod Token（可选），当域名配置中未指定 token 时使用
-- `default_ip_url`: 默认 IP 查询 URL（可选），当域名配置中未指定 ip_url 时使用，默认为"http://whatismyip.akamai.com"
-- `default_hook_command`: 默认 IP 变化时执行的 hook 指令（可选），当域名配置中未指定 hook_command 时使用
+- `default_provider`: 默认 DNS Provider 类型（"dnspod" 或 "cloudflare"），默认为 "dnspod"
+- `default_dnspod_token`: 默认 DNSPod Token（可选）
+- `default_cloudflare_token`: 默认 Cloudflare API Token（可选）
+- `default_cloudflare_zone_id`: 默认 Cloudflare Zone ID（可选）
+- `default_ip_url`: 默认 IP 查询 URL（可选），默认为 "http://whatismyip.akamai.com"
+- `default_hook_command`: 默认 IP 变化时执行的 hook 指令（可选）
 
 ### 域名配置
 
 每个 `[[domains]]` 块代表一个域名配置：
 
-- `domain`: 完整域名，支持多级子域名
-  - 一级子域名：`"sub.example.com"`（如 blog.example.com）
-  - 二级子域名：`"api.v2.example.com"`（如 api 版本控制）
-  - 多级子域名：`"auth.service.k8s.example.com"`（如 微服务架构）
-  - 根域名格式：`"@.example.com"` 或 `"example.com"`
-- `token`: DNSPod API Token（可选），格式为 "token_id,token_secret"，未指定时使用 `default_token`
+- `provider`: DNS Provider 类型（可选），支持 "dnspod" 或 "cloudflare"，未指定时使用 `default_provider`
+- `domain`: 完整域名
+  - DNSPod 支持多级子域名：
+    - 一级子域名：`"sub.example.com"`（如 blog.example.com）
+    - 二级子域名：`"api.v2.example.com"`（如 api 版本控制）
+    - 多级子域名：`"auth.service.k8s.example.com"`（如 微服务架构）
+    - 根域名格式：`"@.example.com"` 或 `"example.com"`
+  - Cloudflare 使用完整的 FQDN（如 "www.example.com"）
+- `dnspod_token`: DNSPod API Token（可选），格式为 "token_id,token_secret"，未指定时使用 `default_dnspod_token`
+- `cloudflare_token`: Cloudflare API Token（可选），未指定时使用 `default_cloudflare_token`
+- `cloudflare_zone_id`: Cloudflare Zone ID（可选），未指定时使用 `default_cloudflare_zone_id`
 - `ip_url`: 获取当前 IP 的 URL（可选），未指定时使用 `default_ip_url`
 - `hook_command`: IP 变化时执行的 hook 指令（可选），未指定时使用 `default_hook_command`
 
@@ -119,9 +147,32 @@ domain = "auth.service.k8s.example.com"
 3. 创建新的 Token，获得 token_id 和 token_secret
 4. 在配置文件中使用格式: "token_id,token_secret"
 
+## 获取 Cloudflare 认证信息
+
+### 1. 获取 API Token
+
+1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)
+2. 进入 "My Profile" -> "API Tokens"
+3. 点击 "Create Token"
+4. 选择 "Edit zone DNS" 模板或创建自定义 token
+5. 设置权限：
+   - Zone - DNS - Edit
+   - Zone - Zone - Read
+6. 选择需要管理的 Zone
+7. 创建 token 并复制保存
+
+### 2. 获取 Account ID（可选）
+
+Account ID 可以加速 Zone 查询，但不是必需的。程序会自动通过域名查询对应的 Zone ID。
+
+1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)
+2. 在右侧栏找到 "Account ID"，复制它
+
+**注意**：程序会自动从域名中提取根域名（如 `sub.example.com` -> `example.com`），然后调用 Cloudflare API 查询对应的 Zone ID 并缓存。因此配置文件中无需手动填写 Zone ID。
+
 ## Hook 功能
 
-程序支持在IP变化时执行hook指令，可以用于在IP更新后执行自定义操作，比如重启服务、通知其他系统等。（Windows上使用powershell，unix上使用bash）
+程序支持在 IP 变化时执行 hook 指令，可以用于在 IP 更新后执行自定义操作，比如重启服务、通知其他系统等。（Windows 上使用 powershell，unix 上使用 bash）
 
 ### Hook 配置
 
@@ -134,9 +185,9 @@ Hook 指令可以在全局默认配置或单个域名配置中设置：
 
 执行 hook 指令时，程序会设置以下环境变量：
 
-- `$DOMAIN`: 发生IP变化的域名
-- `$NEW_IP`: 新的IP地址
-- `$OLD_IP`: 旧的IP地址
+- `$DOMAIN`: 发生 IP 变化的域名
+- `$NEW_IP`: 新的 IP 地址
+- `$OLD_IP`: 旧的 IP 地址
 
 ### Hook 配置示例
 
@@ -159,16 +210,19 @@ domain = "blog.example.com"
 ### Hook 实际应用示例
 
 1. **重启 WireGuard 服务**：
+
    ```toml
    hook_command = 'bash -c "ssh root@server.com \"systemctl restart wg-quick@wg0\""'
    ```
 
 2. **发送通知**：
+
    ```toml
    hook_command = 'bash -c "curl -X POST https://api.telegram.org/bot<token>/sendMessage -d chat_id=<chat_id> -d text=\"IP changed for $DOMAIN: $OLD_IP -> $NEW_IP\""'
    ```
 
 3. **更新防火墙规则**：
+
    ```toml
    hook_command = 'bash -c "ssh root@firewall.com \"ufw allow from $NEW_IP && ufw delete allow from $OLD_IP\""'
    ```
@@ -180,10 +234,10 @@ domain = "blog.example.com"
 
 ### Hook 注意事项
 
-- Hook 指令执行失败不会影响DDNS更新流程
+- Hook 指令执行失败不会影响 DDNS 更新流程
 - Hook 指令的执行结果会记录在日志中
-- 建议在hook指令中添加错误处理和超时机制
-- 如果hook指令需要SSH连接，请确保已配置SSH密钥认证
+- 建议在 hook 指令中添加错误处理和超时机制
+- 如果 hook 指令需要 SSH 连接，请确保已配置 SSH 密钥认证
 
 ## 日志
 
@@ -238,27 +292,27 @@ sleep_secs = 300  # 5分钟检查一次
 force_get_record_interval = 3
 
 # 默认配置
-default_token = "12345,abcdef123456"
+default_dnspod_token = "12345,abcdef123456"
+default_cloudflare_token = "your_cloudflare_api_token"
+default_provider = "dnspod"
 default_ip_url = "https://api.ipify.org"
 
 [[domains]]
 domain = "blog.example.com"
-# 使用默认token和default_ip_url
 
 [[domains]]
 domain = "api.v2.mysite.org"
-token = "67890,ghijkl789012"
-# 使用自定义token但默认ip_url
+dnspod_token = "67890,ghijkl789012"
 
 [[domains]]
 domain = "auth.service.k8s.example.com"
 ip_url = "https://ip.seeip.org"
-# 使用默认token但自定义ip_url
 
 [[domains]]
 domain = "@.example.com"  # 或者直接写 "example.com"
 ip_url = "https://ip.seeip.org"
-# 根域名，使用默认token但自定义ip_url
+provider = "cloudflare"
+hook_command = "echo \"IP changed to $NEW_IP for $DOMAIN\" >> /var/log/ddns-hook.log"
 ```
 
 ## Systemd 服务配置
@@ -284,14 +338,31 @@ sudo mkdir -p /opt/ddns
 sudo cp config.toml /opt/ddns/
 # 或者直接创建配置文件
 sudo tee /opt/ddns/config.toml <<EOF
-sleep_secs = 120
-force_get_record_interval = 5
+sleep_secs = 300  # 5分钟检查一次
+force_get_record_interval = 3
+
+# 默认配置
+default_dnspod_token = "12345,abcdef123456"
+default_cloudflare_token = "your_cloudflare_api_token"
+default_provider = "dnspod"
+default_ip_url = "https://api.ipify.org"
 
 [[domains]]
-token = "your_token_id,your_token_secret"
-domain = "your-domain.com"
-subdomain = "your-subdomain"
-ip_url = "https://api.ipify.org"
+domain = "blog.example.com"
+
+[[domains]]
+domain = "api.v2.mysite.org"
+dnspod_token = "67890,ghijkl789012"
+
+[[domains]]
+domain = "auth.service.k8s.example.com"
+ip_url = "https://ip.seeip.org"
+
+[[domains]]
+domain = "@.example.com"  # 或者直接写 "example.com"
+ip_url = "https://ip.seeip.org"
+provider = "cloudflare"
+hook_command = "echo \"IP changed to $NEW_IP for $DOMAIN\" >> /var/log/ddns-hook.log"
 EOF
 ```
 
