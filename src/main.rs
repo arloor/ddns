@@ -48,9 +48,9 @@ struct Config {
     #[serde(default)]
     default_cloudflare_token: Option<String>,
 
-    /// 默认Cloudflare Zone ID
+    /// 默认Cloudflare Account ID (可选，用于加速Zone查询)
     #[serde(default)]
-    default_cloudflare_zone_id: Option<String>,
+    default_cloudflare_account_id: Option<String>,
 
     /// 默认查询IP的URL
     #[serde(default = "default_ip_url")]
@@ -76,8 +76,8 @@ struct DomainConfig {
     /// Cloudflare API Token (可选，provider为cloudflare时使用，未设置时使用default_cloudflare_token)
     cloudflare_token: Option<String>,
 
-    /// Cloudflare Zone ID (可选，provider为cloudflare时使用，未设置时使用default_cloudflare_zone_id)
-    cloudflare_zone_id: Option<String>,
+    /// Cloudflare Account ID (可选，provider为cloudflare时使用，未设置时使用default_cloudflare_account_id)
+    cloudflare_account_id: Option<String>,
 
     /// 完整域名 (如: "sub.example.com" 或 "@.example.com" 表示根域名)
     domain: String,
@@ -271,14 +271,7 @@ fn load_config(config_path: &PathBuf) -> Result<Config, Error> {
                     i + 1
                 ));
             }
-            if domain_config.cloudflare_zone_id.is_none()
-                && config.default_cloudflare_zone_id.is_none()
-            {
-                return Err(anyhow!(
-                    "Domain {} uses Cloudflare but has no cloudflare_zone_id and no default_cloudflare_zone_id is configured",
-                    i + 1
-                ));
-            }
+            // account_id 是可选的，不需要验证
         }
 
         // 验证域名格式（仅DNSPod需要分割域名）
@@ -335,17 +328,15 @@ fn handle_domain(
                         anyhow!("No Cloudflare token available for domain {}", domain_key)
                     })?;
 
-                let zone_id = domain_config
-                    .cloudflare_zone_id
+                let account_id = domain_config
+                    .cloudflare_account_id
                     .as_ref()
-                    .or(config.default_cloudflare_zone_id.as_ref())
-                    .ok_or_else(|| {
-                        anyhow!("No Cloudflare zone_id available for domain {}", domain_key)
-                    })?;
+                    .or(config.default_cloudflare_account_id.as_ref())
+                    .cloned();
 
                 let provider = dnspod::CloudflareProvider::new(
                     token.clone(),
-                    zone_id.clone(),
+                    account_id,
                     domain_config.domain.clone(),
                 );
                 provider.update_dns_record(current_ip)?

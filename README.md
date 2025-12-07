@@ -46,7 +46,8 @@ default_dnspod_token = "your_dnspod_token_id,your_dnspod_token_secret"
 
 # Cloudflare默认配置
 default_cloudflare_token = "your_cloudflare_api_token"
-default_cloudflare_zone_id = "your_cloudflare_zone_id"
+# 可选：Cloudflare Account ID（用于加速Zone查询）
+# default_cloudflare_account_id = "your_cloudflare_account_id"
 
 # 默认IP查询URL
 default_ip_url = "https://api.ipify.org"
@@ -72,7 +73,7 @@ domain = "@.mysite.org"
 provider = "dnspod"
 dnspod_token = "custom_token_id,custom_token_secret"
 
-# Cloudflare示例：使用默认配置
+# Cloudflare示例：使用默认配置（自动查询Zone ID）
 [[domains]]
 domain = "www.cloudflare-example.com"
 provider = "cloudflare"
@@ -82,7 +83,7 @@ provider = "cloudflare"
 domain = "api.cloudflare-example.com"
 provider = "cloudflare"
 cloudflare_token = "your_cloudflare_api_token"
-cloudflare_zone_id = "your_cloudflare_zone_id"
+cloudflare_account_id = "your_cloudflare_account_id"  # 可选
 hook_command = "curl -X POST https://your-webhook.com/notify"
 ```
 
@@ -160,11 +161,14 @@ hook_command = "curl -X POST https://your-webhook.com/notify"
 6. 选择需要管理的 Zone
 7. 创建 token 并复制保存
 
-### 2. 获取 Zone ID
+### 2. 获取 Account ID（可选）
+
+Account ID 可以加速 Zone 查询，但不是必需的。程序会自动通过域名查询对应的 Zone ID。
 
 1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)
-2. 选择你的域名
-3. 在右侧栏找到 "Zone ID"，复制它
+2. 在右侧栏找到 "Account ID"，复制它
+
+**注意**：程序会自动从域名中提取根域名（如 `sub.example.com` -> `example.com`），然后调用 Cloudflare API 查询对应的 Zone ID 并缓存。因此配置文件中无需手动填写 Zone ID。
 
 ## Hook 功能
 

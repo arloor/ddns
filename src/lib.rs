@@ -3,6 +3,7 @@ use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::sync::Mutex;
 
 // 通用的DNS记录结构
 #[derive(Clone, Debug)]
@@ -248,6 +249,19 @@ struct CloudflareError {
     message: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct CloudflareZoneListResponse {
+    success: bool,
+    errors: Vec<CloudflareError>,
+    result: Vec<CloudflareZone>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct CloudflareZone {
+    id: String,
+    name: String,
+}
+
 #[derive(Serialize, Deserialize)]
 struct CloudflareCreateRequest {
     #[serde(rename = "type")]
@@ -268,20 +282,97 @@ struct CloudflareUpdateRequest {
     proxied: bool,
 }
 
-#[derive(Clone)]
 pub struct CloudflareProvider {
     api_token: String,
-    zone_id: String,
+    account_id: Option<String>,
     record_name: String,
+    // 域名到Zone ID的缓存
+    zone_cache: Mutex<HashMap<String, String>>,
 }
 
 impl CloudflareProvider {
-    pub fn new(api_token: String, zone_id: String, record_name: String) -> Self {
+    pub fn new(api_token: String, account_id: Option<String>, record_name: String) -> Self {
         CloudflareProvider {
             api_token,
-            zone_id,
+            account_id,
             record_name,
+            zone_cache: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// 从完整的记录名称中提取根域名
+    /// 例如: "sub.example.com" -> "example.com"
+    ///      "example.com" -> "example.com"
+    fn extract_zone_name(record_name: &str) -> String {
+        let parts: Vec<&str> = record_name.split('.').collect();
+        if parts.len() >= 2 {
+            format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1])
+        } else {
+            record_name.to_string()
+        }
+    }
+
+    /// 获取Zone ID，优先从缓存读取，缓存未命中时调用API查询
+    fn get_zone_id(&self) -> Result<String, Error> {
+        let zone_name = Self::extract_zone_name(&self.record_name);
+
+        // 先尝试从缓存读取
+        {
+            let cache = self.zone_cache.lock().unwrap();
+            if let Some(zone_id) = cache.get(&zone_name) {
+                info!("Using cached zone_id for {}: {}", zone_name, zone_id);
+                return Ok(zone_id.clone());
+            }
+        }
+
+        // 缓存未命中，调用API查询
+        info!("Querying zone_id for domain: {}", zone_name);
+        let client = reqwest::blocking::Client::new();
+
+        let mut url = format!(
+            "https://api.cloudflare.com/client/v4/zones?name={}",
+            zone_name
+        );
+
+        // 如果提供了 account_id，添加到查询参数
+        if let Some(ref account_id) = self.account_id {
+            url.push_str(&format!("&account.id={}", account_id));
+        }
+
+        let response = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("Content-Type", "application/json")
+            .send()
+            .map_err(|e| anyhow!("Failed to query zone list: {}", e))?;
+
+        let zone_list: CloudflareZoneListResponse = response
+            .json()
+            .map_err(|e| anyhow!("Failed to parse zone list response: {}", e))?;
+
+        if !zone_list.success {
+            let error_msgs: Vec<String> = zone_list
+                .errors
+                .iter()
+                .map(|e| format!("{}: {}", e.code, e.message))
+                .collect();
+            return Err(anyhow!("Cloudflare API error: {}", error_msgs.join(", ")));
+        }
+
+        if zone_list.result.is_empty() {
+            return Err(anyhow!("No zone found for domain: {}", zone_name));
+        }
+
+        let zone_id = zone_list.result[0].id.clone();
+        info!("Found zone_id for {}: {}", zone_name, zone_id);
+
+        // 存入缓存
+        {
+            let mut cache = self.zone_cache.lock().unwrap();
+            cache.insert(zone_name, zone_id.clone());
+        }
+
+        Ok(zone_id)
     }
 
     /// 判断IP地址类型，返回对应的记录类型
@@ -297,10 +388,11 @@ impl CloudflareProvider {
 impl DnsProvider for CloudflareProvider {
     /// 获取DNS记录
     fn get_record(&self) -> Result<Option<DnsRecord>, Error> {
+        let zone_id = self.get_zone_id()?;
         let client = reqwest::blocking::Client::new();
         let url = format!(
             "https://api.cloudflare.com/client/v4/zones/{}/dns_records?name={}",
-            self.zone_id, self.record_name
+            zone_id, self.record_name
         );
 
         let res = client
@@ -345,10 +437,11 @@ impl DnsProvider for CloudflareProvider {
 
     /// 修改DNS记录
     fn modify_record(&self, current_ip: &str, record: &DnsRecord) -> Result<(), Error> {
+        let zone_id = self.get_zone_id()?;
         let client = reqwest::blocking::Client::new();
         let url = format!(
             "https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}",
-            self.zone_id, record.id
+            zone_id, record.id
         );
 
         let update_request = CloudflareUpdateRequest {
@@ -392,10 +485,11 @@ impl DnsProvider for CloudflareProvider {
 
     /// 添加DNS记录
     fn add_record(&self, current_ip: &str) -> Result<(), Error> {
+        let zone_id = self.get_zone_id()?;
         let client = reqwest::blocking::Client::new();
         let url = format!(
             "https://api.cloudflare.com/client/v4/zones/{}/dns_records",
-            self.zone_id
+            zone_id
         );
 
         let create_request = CloudflareCreateRequest {

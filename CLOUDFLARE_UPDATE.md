@@ -22,11 +22,20 @@
 
 新增 `CloudflareProvider` 结构，实现以下 Cloudflare API 调用：
 
+- **List Zones** (GET): 自动查询域名对应的 Zone ID（带缓存）
 - **List DNS Records** (GET): 查询现有 DNS 记录
 - **Create DNS Record** (POST): 创建新的 DNS 记录
 - **Update DNS Record** (PATCH): 更新现有 DNS 记录
 
 使用 Cloudflare API v4，通过 Bearer Token 认证。
+
+#### Zone ID 自动查询与缓存
+
+程序会自动从域名中提取根域名并查询对应的 Zone ID：
+
+- `sub.example.com` → 提取 `example.com` → 查询 Zone ID
+- `api.v2.example.com` → 提取 `example.com` → 查询 Zone ID
+- Zone ID 会被缓存在内存中，避免重复 API 调用
 
 ### 4. 更新配置文件结构
 
@@ -37,15 +46,17 @@
 default_provider = "dnspod"  # 或 "cloudflare"
 default_dnspod_token = "..."
 default_cloudflare_token = "..."
-default_cloudflare_zone_id = "..."
+default_cloudflare_account_id = "..."  # 可选，用于加速 Zone 查询
 
 # 域名配置
 [[domains]]
 provider = "cloudflare"  # 可选，未设置时使用 default_provider
 cloudflare_token = "..."  # 可选，未设置时使用 default_cloudflare_token
-cloudflare_zone_id = "..."  # 可选，未设置时使用 default_cloudflare_zone_id
+cloudflare_account_id = "..."  # 可选，未设置时使用 default_cloudflare_account_id
 domain = "www.example.com"
 ```
+
+**注意**：不再需要手动配置 `cloudflare_zone_id`，程序会自动查询并缓存。
 
 ### 5. 代码结构
 
@@ -83,8 +94,14 @@ dnspod_token = "token_id,token_secret"
 domain = "www.example.com"
 provider = "cloudflare"
 cloudflare_token = "your_cloudflare_api_token"
-cloudflare_zone_id = "your_zone_id"
+# cloudflare_account_id = "your_account_id"  # 可选，用于加速 Zone 查询
 ```
+
+**说明**：
+
+- 不需要配置 `cloudflare_zone_id`，程序会自动查询
+- `cloudflare_account_id` 是可选的，可以加快 Zone 查询速度
+- 程序会自动从 `www.example.com` 提取根域名 `example.com` 并查询对应的 Zone ID
 
 ## 获取 Cloudflare 认证信息
 
@@ -96,16 +113,20 @@ cloudflare_zone_id = "your_zone_id"
    - Zone - DNS - Edit
    - Zone - Zone - Read
 
-### Zone ID
+### Account ID（可选）
 
-1. 在 Cloudflare Dashboard 选择域名
-2. 右侧栏找到 "Zone ID" 并复制
+Account ID 可以加速 Zone 查询，但不是必需的：
+
+1. 在 Cloudflare Dashboard 右侧栏找到 "Account ID" 并复制
+
+**重要**：不需要手动获取 Zone ID，程序会自动从域名查询对应的 Zone ID 并缓存。
 
 ## API 实现细节
 
 ### Cloudflare API 端点
 
-- **List**: `GET /zones/{zone_id}/dns_records?name={record_name}`
+- **List Zones**: `GET /zones?name={domain_name}` (自动查询 Zone ID)
+- **List DNS Records**: `GET /zones/{zone_id}/dns_records?name={record_name}`
 - **Create**: `POST /zones/{zone_id}/dns_records`
 - **Update**: `PATCH /zones/{zone_id}/dns_records/{record_id}`
 
@@ -134,6 +155,8 @@ Content-Type: application/json
 2. TTL 设为 1 表示自动 TTL（由 Cloudflare 管理）
 3. `proxied` 设为 false，仅更新 DNS 记录，不启用 CDN 代理
 4. Cloudflare List API 支持通过 `name` 参数精确过滤记录，无需使用 get API
+5. **Zone ID 自动查询**：程序会自动从域名提取根域名并查询 Zone ID，查询结果会缓存在内存中
+6. **缓存机制**：同一个根域名的 Zone ID 只会查询一次，后续使用缓存值
 
 ## 向后兼容性
 

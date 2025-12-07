@@ -15,7 +15,9 @@ default_dnspod_token = "your_default_dnspod_token_id,your_default_dnspod_token_s
 
 # Cloudflare默认配置
 default_cloudflare_token = "your_default_cloudflare_api_token"
-default_cloudflare_zone_id = "your_default_cloudflare_zone_id"
+# Cloudflare Account ID（可选，用于加速Zone查询）
+# 如果不设置，程序会自动通过域名查询对应的Zone ID
+# default_cloudflare_account_id = "your_cloudflare_account_id"
 
 # 默认IP查询URL
 default_ip_url = "https://api.ipify.org"
@@ -68,38 +70,37 @@ hook_command = "/path/to/your/custom-script.sh"
 
 # ========== Cloudflare 示例 ==========
 
-# 示例6：使用默认Cloudflare配置
+# 示例6：使用默认Cloudflare配置（程序会自动查询Zone ID）
 [[domains]]
 domain = "www.cloudflare-example.com"
 provider = "cloudflare"
-# 使用default_cloudflare_token和default_cloudflare_zone_id
+# 使用default_cloudflare_token，程序会自动查询cloudflare-example.com的Zone ID
 
-# 示例7：使用自定义Cloudflare配置
+# 示例7：使用自定义Cloudflare配置和Account ID
 [[domains]]
 domain = "api.cloudflare-example.com"
 provider = "cloudflare"
 cloudflare_token = "your_custom_cloudflare_api_token"
-cloudflare_zone_id = "your_custom_cloudflare_zone_id"
+cloudflare_account_id = "your_cloudflare_account_id"                                                 # 可选，用于加速Zone查询
 ip_url = "https://api.ipify.org"
 hook_command = "echo \"Cloudflare DNS updated for api.cloudflare-example.com\" >> /var/log/ddns.log"
 
-# 示例8：Cloudflare根域名
+# 示例8：Cloudflare根域名（程序会自动识别并查询对应Zone）
 [[domains]]
 domain = "cloudflare-root.com"
 provider = "cloudflare"
 cloudflare_token = "your_cloudflare_api_token"
-cloudflare_zone_id = "your_cloudflare_zone_id"
 
-# 示例9：Cloudflare多级子域名
+# 示例9：Cloudflare多级子域名（程序会自动提取根域名并查询Zone）
 [[domains]]
 domain = "deep.nested.subdomain.cloudflare-example.com"
 provider = "cloudflare"
 cloudflare_token = "your_cloudflare_api_token"
-cloudflare_zone_id = "your_cloudflare_zone_id"
 hook_command = "curl -X POST https://your-webhook-url.com/notify"
 
-# 示例6：特殊情况 - 国际化域名，配置防火墙更新
+# 示例10：特殊情况 - 国际化域名，配置防火墙更新
 [[domains]]
 domain = "cdn.prod.example.co.uk"
-token = "uk_specific_token_id,uk_specific_token_secret"
+provider = "dnspod"
+dnspod_token = "uk_specific_token_id,uk_specific_token_secret"
 hook_command = "ssh root@firewall.com \"ufw allow from $NEW_IP && ufw delete allow from $OLD_IP\""
