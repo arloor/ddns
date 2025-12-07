@@ -77,17 +77,15 @@ struct CloudflareUpdateRequest {
 
 pub struct CloudflareProvider {
     api_token: String,
-    account_id: Option<String>,
     record_name: String,
     // 域名到Zone ID的缓存
     zone_cache: Mutex<HashMap<String, String>>,
 }
 
 impl CloudflareProvider {
-    pub fn new(api_token: String, account_id: Option<String>, record_name: String) -> Self {
+    pub fn new(api_token: String, record_name: String) -> Self {
         CloudflareProvider {
             api_token,
-            account_id,
             record_name,
             zone_cache: Mutex::new(HashMap::new()),
         }
@@ -122,15 +120,10 @@ impl CloudflareProvider {
         info!("Querying zone_id for domain: {}", zone_name);
         let client = reqwest::blocking::Client::new();
 
-        let mut url = format!(
+        let url = format!(
             "https://api.cloudflare.com/client/v4/zones?name={}",
             zone_name
         );
-
-        // 如果提供了 account_id，添加到查询参数
-        if let Some(ref account_id) = self.account_id {
-            url.push_str(&format!("&account.id={}", account_id));
-        }
 
         let response = client
             .get(&url)

@@ -48,10 +48,6 @@ struct Config {
     #[serde(default)]
     default_cloudflare_token: Option<String>,
 
-    /// 默认Cloudflare Account ID (可选，用于加速Zone查询)
-    #[serde(default)]
-    default_cloudflare_account_id: Option<String>,
-
     /// 默认查询IP的URL
     #[serde(default = "default_ip_url")]
     default_ip_url: String,
@@ -326,15 +322,8 @@ fn handle_domain(
                         anyhow!("No Cloudflare token available for domain {}", domain_key)
                     })?;
 
-                let account_id = domain_config
-                    .cloudflare_account_id
-                    .as_ref()
-                    .or(config.default_cloudflare_account_id.as_ref())
-                    .cloned();
-
                 let provider = CloudflareProvider::new(
                     token.clone(),
-                    account_id,
                     domain_config.domain.clone(),
                 );
                 provider.update_dns_record(current_ip)?
