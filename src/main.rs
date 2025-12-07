@@ -13,6 +13,16 @@ use std::sync::LazyLock;
 use std::thread::sleep;
 use std::time::Duration;
 
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
+enum Provider {
+    #[default]
+    Dnspod,
+    Cloudflare,
+}
+
+
 #[derive(Parser)]
 #[command(name = "ddns")]
 #[command(about = "A DNSPod DDNS client that supports multiple domains")]
@@ -37,8 +47,8 @@ struct Config {
     force_get_record_interval: i8,
 
     /// 默认DNS Provider类型 ("dnspod" 或 "cloudflare")
-    #[serde(default = "default_provider")]
-    default_provider: String,
+    #[serde(default)]
+    default_provider: Provider,
 
     /// 默认DNSPod Token
     #[serde(default)]
@@ -64,7 +74,7 @@ struct Config {
 struct DomainConfig {
     /// DNS Provider类型 (可选，未设置时使用default_provider)
     /// 支持: "dnspod" 或 "cloudflare"
-    provider: Option<String>,
+    provider: Option<Provider>,
 
     /// DNSPod Token (可选，provider为dnspod时使用，未设置时使用default_dnspod_token)
     dnspod_token: Option<String>,
@@ -92,10 +102,6 @@ fn default_force_interval() -> i8 {
 
 fn default_ip_url() -> String {
     "http://whatismyip.akamai.com".to_string()
-}
-
-fn default_provider() -> String {
-    "dnspod".to_string()
 }
 
 // 全局静态HTTP客户端，禁用代理
@@ -231,42 +237,32 @@ fn load_config(config_path: &PathBuf) -> Result<Config, Error> {
 
     // 验证每个域名配置
     for (i, domain_config) in config.domains.iter().enumerate() {
-        let provider = domain_config
-            .provider
-            .as_ref()
-            .unwrap_or(&config.default_provider);
-
-        // 检查provider类型
-        if provider != "dnspod" && provider != "cloudflare" {
-            return Err(anyhow!(
-                "Domain {} has invalid provider '{}'. Must be 'dnspod' or 'cloudflare'",
-                i + 1,
-                provider
-            ));
-        }
+        let provider = domain_config.provider.unwrap_or(config.default_provider);
 
         // 检查DNSPod配置
-        if provider == "dnspod"
-            && domain_config.dnspod_token.is_none() && config.default_dnspod_token.is_none() {
-                return Err(anyhow!(
+        if provider == Provider::Dnspod
+            && domain_config.dnspod_token.is_none()
+            && config.default_dnspod_token.is_none()
+        {
+            return Err(anyhow!(
                     "Domain {} uses DNSPod but has no dnspod_token and no default_dnspod_token is configured",
                     i + 1
                 ));
-            }
+        }
 
         // 检查Cloudflare配置
-        if provider == "cloudflare"
-            && domain_config.cloudflare_token.is_none() && config.default_cloudflare_token.is_none()
-            {
-                return Err(anyhow!(
+        if provider == Provider::Cloudflare
+            && domain_config.cloudflare_token.is_none()
+            && config.default_cloudflare_token.is_none()
+        {
+            return Err(anyhow!(
                     "Domain {} uses Cloudflare but has no cloudflare_token and no default_cloudflare_token is configured",
                     i + 1
                 ));
-            }
-            // account_id 是可选的，不需要验证
+        }
 
         // 验证域名格式（仅DNSPod需要分割域名）
-        if provider == "dnspod" {
+        if provider == Provider::Dnspod {
             if let Err(e) = parse_domain(&domain_config.domain) {
                 return Err(anyhow!("Domain {} has invalid format: {}", i + 1, e));
             }
@@ -287,15 +283,12 @@ fn handle_domain(
     let domain_key = domain_config.domain.clone();
 
     // 获取provider类型
-    let provider = domain_config
-        .provider
-        .as_ref()
-        .unwrap_or(&config.default_provider);
+    let provider = domain_config.provider.unwrap_or(config.default_provider);
 
     let latest_ip = latest_ips.get(&domain_key).cloned().unwrap_or_default();
     if current_ip != latest_ip || force_update {
-        let updated = match provider.as_str() {
-            "dnspod" => {
+        let updated = match provider {
+            Provider::Dnspod => {
                 // DNSPod provider
                 let (subdomain, main_domain) = parse_domain(&domain_config.domain)?;
                 let token = domain_config
@@ -309,7 +302,7 @@ fn handle_domain(
                 let client = dnspod::init(token.clone(), main_domain, subdomain);
                 client.update_dns_record(current_ip)?
             }
-            "cloudflare" => {
+            Provider::Cloudflare => {
                 // Cloudflare provider
                 let token = domain_config
                     .cloudflare_token
@@ -319,14 +312,8 @@ fn handle_domain(
                         anyhow!("No Cloudflare token available for domain {}", domain_key)
                     })?;
 
-                let provider = CloudflareProvider::new(
-                    token.clone(),
-                    domain_config.domain.clone(),
-                );
+                let provider = CloudflareProvider::new(token.clone(), domain_config.domain.clone());
                 provider.update_dns_record(current_ip)?
-            }
-            _ => {
-                return Err(anyhow!("Unknown provider: {}", provider));
             }
         };
 
