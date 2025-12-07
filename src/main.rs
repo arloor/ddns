@@ -1,7 +1,7 @@
 #![cfg_attr(windows_subsystem, windows_subsystem = "windows")]
 use anyhow::{anyhow, Error};
 use clap::Parser;
-use dnspod::DnsProvider;
+use dnspod::{CloudflareProvider, DnsProvider};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -253,18 +253,17 @@ fn load_config(config_path: &PathBuf) -> Result<Config, Error> {
         }
 
         // 检查DNSPod配置
-        if provider == "dnspod" {
-            if domain_config.dnspod_token.is_none() && config.default_dnspod_token.is_none() {
+        if provider == "dnspod"
+            && domain_config.dnspod_token.is_none() && config.default_dnspod_token.is_none() {
                 return Err(anyhow!(
                     "Domain {} uses DNSPod but has no dnspod_token and no default_dnspod_token is configured",
                     i + 1
                 ));
             }
-        }
 
         // 检查Cloudflare配置
-        if provider == "cloudflare" {
-            if domain_config.cloudflare_token.is_none() && config.default_cloudflare_token.is_none()
+        if provider == "cloudflare"
+            && domain_config.cloudflare_token.is_none() && config.default_cloudflare_token.is_none()
             {
                 return Err(anyhow!(
                     "Domain {} uses Cloudflare but has no cloudflare_token and no default_cloudflare_token is configured",
@@ -272,7 +271,6 @@ fn load_config(config_path: &PathBuf) -> Result<Config, Error> {
                 ));
             }
             // account_id 是可选的，不需要验证
-        }
 
         // 验证域名格式（仅DNSPod需要分割域名）
         if provider == "dnspod" {
@@ -316,7 +314,7 @@ fn handle_domain(
                     })?;
 
                 let client = dnspod::init(token.clone(), main_domain, subdomain);
-                client.update_dns_record(&current_ip.to_string())?
+                client.update_dns_record(current_ip)?
             }
             "cloudflare" => {
                 // Cloudflare provider
@@ -334,7 +332,7 @@ fn handle_domain(
                     .or(config.default_cloudflare_account_id.as_ref())
                     .cloned();
 
-                let provider = dnspod::CloudflareProvider::new(
+                let provider = CloudflareProvider::new(
                     token.clone(),
                     account_id,
                     domain_config.domain.clone(),
