@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Error};
-use log::{debug, warn};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::sync::Mutex;
@@ -209,7 +209,7 @@ impl DnsProvider for CloudflareProvider {
 
                 if !response.result.is_empty() {
                     let record = &response.result[0];
-                    debug!("current cloudflare record is {:?}", record);
+                    info!("current cloudflare record is {:?}", record);
                     Ok(Some(DnsRecord {
                         id: record.id.clone(),
                         name: record.name.clone(),
