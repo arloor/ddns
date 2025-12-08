@@ -183,7 +183,7 @@ impl DnsProvider for CloudflareProvider {
         let zone_id = self.get_zone_id()?;
         let client = reqwest::blocking::Client::new();
         let url = format!(
-            "https://api.cloudflare.com/client/v4/zones/{}/dns_records?name={}",
+            "https://api.cloudflare.com/client/v4/zones/{}/dns_records?name={}&type=CNAME,A,AAAA",
             zone_id, self.record_name
         );
 
