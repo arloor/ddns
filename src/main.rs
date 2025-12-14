@@ -17,11 +17,10 @@ use std::time::Duration;
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 enum Provider {
-    #[default]
     Dnspod,
+    #[default]
     Cloudflare,
 }
-
 
 #[derive(Parser)]
 #[command(name = "ddns")]
