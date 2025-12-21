@@ -1,7 +1,11 @@
 #![cfg_attr(windows_subsystem, windows_subsystem = "windows")]
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
+use askama::Template;
 use clap::Parser;
-use dnspod::{CloudflareProvider, DnsProvider};
+use dns_lib::CloudflareProvider;
+use dns_lib::DnsProvider;
+use dns_lib::DnsUpdateResult;
+use dns_lib::dnspod::DnspodProvider;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -9,9 +13,11 @@ use std::fs;
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::LazyLock;
+use std::sync::{LazyLock, OnceLock};
 use std::thread::sleep;
 use std::time::Duration;
+use telegram_bot_send::{DynError, TelegramBot, TelegramBotBuilder};
+use tokio::runtime::Runtime;
 
 #[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -33,6 +39,12 @@ struct Args {
     /// Enable verbose logging
     #[arg(short, long)]
     verbose: bool,
+    #[arg(long)]
+    tg_bot_token: Option<String>,
+    #[arg(long)]
+    tg_chat_id: Option<String>,
+    #[arg(long)]
+    tg_http_proxy: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -244,9 +256,9 @@ fn load_config(config_path: &PathBuf) -> Result<Config, Error> {
             && config.default_dnspod_token.is_none()
         {
             return Err(anyhow!(
-                    "Domain {} uses DNSPod but has no dnspod_token and no default_dnspod_token is configured",
-                    i + 1
-                ));
+                "Domain {} uses DNSPod but has no dnspod_token and no default_dnspod_token is configured",
+                i + 1
+            ));
         }
 
         // 检查Cloudflare配置
@@ -255,38 +267,41 @@ fn load_config(config_path: &PathBuf) -> Result<Config, Error> {
             && config.default_cloudflare_token.is_none()
         {
             return Err(anyhow!(
-                    "Domain {} uses Cloudflare but has no cloudflare_token and no default_cloudflare_token is configured",
-                    i + 1
-                ));
+                "Domain {} uses Cloudflare but has no cloudflare_token and no default_cloudflare_token is configured",
+                i + 1
+            ));
         }
 
         // 验证域名格式（仅DNSPod需要分割域名）
-        if provider == Provider::Dnspod {
-            if let Err(e) = parse_domain(&domain_config.domain) {
-                return Err(anyhow!("Domain {} has invalid format: {}", i + 1, e));
-            }
+        if provider == Provider::Dnspod
+            && let Err(e) = parse_domain(&domain_config.domain)
+        {
+            return Err(anyhow!("Domain {} has invalid format: {}", i + 1, e));
         }
     }
 
     Ok(config)
 }
 
+struct DomainUpdateResult {
+    domain: String,
+    new_ip: String,
+    old_ip: String,
+}
+
 /// 处理单个域名的DDNS更新
-fn handle_domain(
+fn update_record_if_need(
     domain_config: &DomainConfig,
     config: &Config,
     current_ip: &str,
-    latest_ips: &mut std::collections::HashMap<String, String>,
-    force_update: bool,
-) -> Result<(), Error> {
-    let domain_key = domain_config.domain.clone();
-
-    // 获取provider类型
-    let provider = domain_config.provider.unwrap_or(config.default_provider);
-
-    let latest_ip = latest_ips.get(&domain_key).cloned().unwrap_or_default();
-    if current_ip != latest_ip || force_update {
-        let updated = match provider {
+    old_ip: &str,
+    get_current_record_from_authority: bool,
+) -> Result<DnsUpdateResult, Error> {
+    let domain = domain_config.domain.clone();
+    if current_ip != old_ip || get_current_record_from_authority {
+        // 获取provider类型
+        let provider = domain_config.provider.unwrap_or(config.default_provider);
+        match provider {
             Provider::Dnspod => {
                 // DNSPod provider
                 let (subdomain, main_domain) = parse_domain(&domain_config.domain)?;
@@ -294,12 +309,11 @@ fn handle_domain(
                     .dnspod_token
                     .as_ref()
                     .or(config.default_dnspod_token.as_ref())
-                    .ok_or_else(|| {
-                        anyhow!("No DNSPod token available for domain {}", domain_key)
-                    })?;
+                    .ok_or_else(|| anyhow!("No DNSPod token available for domain {}", domain))?;
 
-                let client = dnspod::init(token.clone(), main_domain, subdomain);
-                client.update_dns_record(current_ip)?
+                let provider: DnspodProvider =
+                    DnspodProvider::new(token.clone(), main_domain, subdomain);
+                Ok(provider.update_dns_record(current_ip)?)
             }
             Provider::Cloudflare => {
                 // Cloudflare provider
@@ -308,41 +322,28 @@ fn handle_domain(
                     .as_ref()
                     .or(config.default_cloudflare_token.as_ref())
                     .ok_or_else(|| {
-                        anyhow!("No Cloudflare token available for domain {}", domain_key)
+                        anyhow!("No Cloudflare token available for domain {}", domain)
                     })?;
 
                 let provider = CloudflareProvider::new(token.clone(), domain_config.domain.clone());
-                provider.update_dns_record(current_ip)?
+                Ok(provider.update_dns_record(current_ip)?)
             }
-        };
-
-        if updated {
-            info!("Successfully updated DNS record for {domain_key}: {current_ip}");
-
-            // 如果IP发生变化，执行hook指令
-            if let Some(hook_command) = domain_config
-                .hook_command
-                .as_ref()
-                .or(config.default_hook_command.as_ref())
-            {
-                if let Err(e) =
-                    execute_hook_command(hook_command, &domain_key, current_ip, &latest_ip)
-                {
-                    error!("Hook command execution failed for {domain_key}: {e}");
-                    // 不返回错误，让程序继续运行
-                }
-            }
-
-            latest_ips.insert(domain_key, current_ip.to_string());
-        } else {
-            info!("no need to update DNS record for {domain_key}: {current_ip}");
         }
     } else {
-        info!("IP for {domain_key} unchanged: {current_ip}");
+        info!("IP for {domain} unchanged: {current_ip}");
+        Ok(DnsUpdateResult::Unchanged)
     }
-
-    Ok(())
 }
+
+pub(crate) static TG_BOT: OnceLock<Result<TelegramBot, DynError>> = OnceLock::new();
+
+// 全局 Tokio runtime，用于异步操作
+static TOKIO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to create Tokio runtime")
+});
 
 fn main() -> Result<(), Error> {
     let args = Args::parse();
@@ -365,15 +366,11 @@ fn main() -> Result<(), Error> {
     let mut iteration = 0;
 
     loop {
-        let force_update = iteration % config.force_get_record_interval == 0;
-
-        if args.verbose {
-            info!("Starting iteration {iteration}, force_update: {force_update}");
-        }
+        let get_current_record_from_authority = iteration % config.force_get_record_interval == 0;
 
         // 处理每个域名配置
         for domain_config in &config.domains {
-            let domain_key = &domain_config.domain;
+            let domain = &domain_config.domain;
 
             // 获取IP查询URL，优先使用域名配置中的ip_url
             let ip_url = domain_config
@@ -383,17 +380,49 @@ fn main() -> Result<(), Error> {
 
             // 获取当前IP
             match current_ip(ip_url) {
-                Ok(ip) => {
-                    info!("Current IP for {domain_key} from {ip_url}: {ip}");
+                Ok(current_ip) => {
+                    info!("Current IP for {domain} from {ip_url}: {current_ip}");
+                    let old_ip = latest_ips.get(domain).cloned().unwrap_or_default();
 
-                    if let Err(e) =
-                        handle_domain(domain_config, &config, &ip, &mut latest_ips, force_update)
-                    {
-                        error!("Error handling domain {domain_key}: {e}");
+                    match update_record_if_need(
+                        domain_config,
+                        &config,
+                        &current_ip,
+                        &old_ip,
+                        get_current_record_from_authority,
+                    ) {
+                        Ok(result) => match result {
+                            DnsUpdateResult::Changed { old_ip } => {
+                                latest_ips.insert(domain.clone(), current_ip.clone());
+                                let result = DomainUpdateResult {
+                                    domain: domain.clone(),
+                                    new_ip: current_ip.clone(),
+                                    old_ip: old_ip.clone(),
+                                };
+
+                                send_tg(&args, &result);
+                                exec_hook_if_present(&config, domain_config, domain, result);
+                            }
+                            DnsUpdateResult::Created => {
+                                latest_ips.insert(domain.clone(), current_ip.clone());
+                                let result = DomainUpdateResult {
+                                    domain: domain.clone(),
+                                    new_ip: current_ip.clone(),
+                                    old_ip: "".to_string(),
+                                };
+
+                                send_tg(&args, &result);
+                                exec_hook_if_present(&config, domain_config, domain, result);
+                            }
+                            DnsUpdateResult::Unchanged => {}
+                        },
+                        Err(e) => {
+                            error!("Error updating domain {}: {}", domain, e);
+                        }
                     }
                 }
                 Err(e) => {
-                    error!("Error fetching current IP for {domain_key} from {ip_url}: {e}");
+                    error!("Error fetching current IP for {domain} from {ip_url}: {e}");
                 }
             }
         }
@@ -402,6 +431,96 @@ fn main() -> Result<(), Error> {
         sleep(Duration::from_secs(config.sleep_secs));
         iteration += 1;
     }
+}
+
+fn exec_hook_if_present(
+    config: &Config,
+    domain_config: &DomainConfig,
+    domain_key: &String,
+    result: DomainUpdateResult,
+) {
+    // 如果IP发生变化，执行hook指令
+    if let Some(hook_command) = domain_config
+        .hook_command
+        .as_ref()
+        .or(config.default_hook_command.as_ref())
+        && let Err(e) = execute_hook_command(
+            hook_command,
+            &result.domain,
+            result.new_ip.as_str(),
+            result.old_ip.as_str(),
+        )
+    {
+        error!("Hook command execution failed for {domain_key}: {e}");
+        // 不返回错误，让程序继续运行
+    }
+}
+
+fn send_tg(args: &Args, result: &DomainUpdateResult) {
+    if let Some(tg_bot_token) = &args.tg_bot_token
+        && let Some(tg_chat_id) = &args.tg_chat_id
+    {
+        let message = TelegramMessage {
+            domain: result.domain.clone(),
+            new_ip: result.new_ip.clone(),
+            old_ip: result.old_ip.clone(),
+        };
+        message
+            .render()
+            .map_err(|e| {
+                error!("Failed to render Telegram message template: {}", e);
+            })
+            .map(|msg| {
+                let bot = TG_BOT.get_or_init(|| {
+                    let mut builder = TelegramBotBuilder::new(tg_bot_token.clone());
+                    if let Some(proxy) = &args.tg_http_proxy {
+                        builder = builder.http_proxy(proxy.clone());
+                    }
+                    builder.build()
+                });
+                match bot {
+                    Ok(bot) => {
+                        TOKIO_RUNTIME.block_on(async {
+                            if let Err(e) =
+                                bot.send_message(tg_chat_id.clone(), format_md2(&msg)).await
+                            {
+                                error!(
+                                    "Failed to send Telegram message for {}: {:?}",
+                                    result.domain, e
+                                );
+                            } else {
+                                info!("Sent Telegram message for {}", result.domain);
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        error!("Failed to initialize Telegram bot: {}", e);
+                    }
+                }
+            })
+            .ok();
+    }
+}
+
+/// 格式化所有特殊字符为 MarkdownV2 格式
+fn format_md2(text: &str) -> String {
+    text.replace("_", r"\_")
+        .replace("[", r"\[")
+        .replace("]", r"\]")
+        .replace("(", r"\(")
+        .replace(")", r"\)")
+        .replace("-", r"\-")
+        .replace(".", r"\.")
+        .replace("!", r"\!")
+}
+
+#[derive(Template)]
+#[template(path = "tg_bot_message_template")]
+#[allow(dead_code)]
+struct TelegramMessage {
+    domain: String,
+    new_ip: String,
+    old_ip: String,
 }
 
 #[cfg(test)]

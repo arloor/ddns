@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -156,41 +156,5 @@ impl DnsProvider for DnspodProvider {
 
         debug!("error add record");
         Err(anyhow!("Error adding record"))
-    }
-}
-
-// ========== 向后兼容的辅助函数 ==========
-
-#[derive(Clone)]
-pub struct DnspodClient {
-    provider: DnspodProvider,
-}
-
-/// 初始化DNSPod配置并返回一个DnspodClient实例（向后兼容）
-pub fn init(token: String, domain: String, sub_domain: String) -> DnspodClient {
-    DnspodClient {
-        provider: DnspodProvider::new(token, domain, sub_domain),
-    }
-}
-
-impl DnspodClient {
-    /// 获取DNS记录（向后兼容）
-    pub fn get_record(&self) -> Result<Option<DnsRecord>, Error> {
-        self.provider.get_record()
-    }
-
-    /// 修改DNS记录（向后兼容）
-    pub fn modify_record(&self, current_ip: &str, record: &DnsRecord) -> Result<(), Error> {
-        self.provider.modify_record(current_ip, record)
-    }
-
-    /// 添加DNS记录（向后兼容）
-    pub fn add_record(&self, current_ip: &str) -> Result<(), Error> {
-        self.provider.add_record(current_ip)
-    }
-
-    /// 更新DNS记录（包括检查、添加或修改记录）（向后兼容）
-    pub fn update_dns_record(&self, current_ip: &str) -> Result<bool, Error> {
-        self.provider.update_dns_record(current_ip)
     }
 }

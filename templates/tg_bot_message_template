@@ -1,0 +1,6 @@
+`{{domain}}` 的 DNS 记录已更新为 `{{new_ip}}` 。
+
+{%~ if old_ip.len() > 0 -%}
+
+旧的 IP 地址是 `{{old_ip}}` 
+{%~ endif -%}
