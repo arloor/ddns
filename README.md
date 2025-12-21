@@ -418,11 +418,10 @@ tailf -fn 100 /opt/ddns/log/ddns.log
 在 Windows 系统上，你可以选择编译无控制台窗口的版本，适合作为后台服务运行：
 
 ```bash
-# 标准编译（会显示控制台窗口）
-cargo build --release
-
 # 无控制台窗口编译
-cargo build --release --features no-console
+stop-scheduledTask ddns
+cargo install --path . --features no-console
+start-scheduledTask ddns
 ```
 
 启用 `no-console` feature 后：
