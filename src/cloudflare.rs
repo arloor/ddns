@@ -111,12 +111,11 @@ impl CloudflareProvider {
         // 先尝试从缓存读取
         {
             let cache = CLOUDFLARE_ZONE_CACHE.lock().unwrap();
-            if let Some(token_cache) = cache.get(&self.api_token) {
-                if let Some(zone_id) = token_cache.get(&zone_name) {
+            if let Some(token_cache) = cache.get(&self.api_token)
+                && let Some(zone_id) = token_cache.get(&zone_name) {
                     debug!("Using cached zone_id for {}: {}", zone_name, zone_id);
                     return Ok(zone_id.clone());
                 }
-            }
         }
 
         // 缓存未命中，调用API查询
