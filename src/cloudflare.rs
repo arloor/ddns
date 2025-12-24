@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
@@ -112,10 +112,11 @@ impl CloudflareProvider {
         {
             let cache = CLOUDFLARE_ZONE_CACHE.lock().unwrap();
             if let Some(token_cache) = cache.get(&self.api_token)
-                && let Some(zone_id) = token_cache.get(&zone_name) {
-                    debug!("Using cached zone_id for {}: {}", zone_name, zone_id);
-                    return Ok(zone_id.clone());
-                }
+                && let Some(zone_id) = token_cache.get(&zone_name)
+            {
+                debug!("Using cached zone_id for {}: {}", zone_name, zone_id);
+                return Ok(zone_id.clone());
+            }
         }
 
         // 缓存未命中，调用API查询
