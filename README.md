@@ -440,3 +440,9 @@ start-scheduledTask ddns
 default = ["no-console"]
 no-console = []
 ```
+
+
+## cloudflare api token 获取
+
+![alt text](image.png)
+![alt text](image-1.png)
