@@ -30,6 +30,6 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] } # HTTP 客户端
 clap = { version = "4.5", features = ["derive"] } # 命令行参数解析
 toml = "0.9" # TOML配置文件解析
-askama = "0.14.0"
-telegram-bot-send = { git = "https://github.com/arloor/rust_http_proxy" }
+askama = "0.15.0"
+telegram-bot-send = { git = "https://github.com/arloor/telegram-bot-send.git" }
 tokio = "1.48.0"
